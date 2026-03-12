@@ -8,5 +8,5 @@ export const ai = genkit({
       serverAddress: 'http://localhost:11434',
     }),
   ],
-  model: 'ollama/llama3',
+  model: 'ollama/llama3.1:latest',
 });
