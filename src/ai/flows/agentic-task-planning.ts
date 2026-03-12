@@ -1,8 +1,8 @@
 
 'use server';
 /**
- * @fileOverview This file defines a Genkit flow for generating a step-by-step plan
- * for a development task using available AI tools and local Ollama.
+ * @fileOverview This file defines a Genkit flow for generating a step-by-step plan.
+ * Fixed parsing issues by avoiding backticks in the prompt template.
  */
 
 import { ai } from '@/ai/genkit';
@@ -38,36 +38,22 @@ export type AgenticTaskPlanningOutput = z.infer<
   typeof AgenticTaskPlanningOutputSchema
 >;
 
-// Tool Definitions
-const fileReadingTool = ai.defineTool(
-  {
-    name: 'fileReadingTool',
-    description: 'Reads the content of a specific file within the project.',
-    inputSchema: z.object({
-      filePath: z
-        .string()
-        .describe('The path to the file to read, relative to the project root.'),
-    }),
-    outputSchema: z.object({
-      content: z.string(),
-    }),
-  },
-  async (input) => ({ content: `Simulated content for ${input.filePath}` })
-);
-
 const agenticTaskPlanningPrompt = ai.definePrompt({
   name: 'agenticTaskPlanningPrompt',
   input: { schema: AgenticTaskPlanningInputSchema },
   output: { schema: AgenticTaskPlanningOutputSchema },
-  tools: [fileReadingTool],
-  prompt: `You are an expert AI agent specialized in software planning.
-Analyze the task: {{{developmentTask}}}
+  prompt: `You are an expert software architect.
+Task: {{{developmentTask}}}
 
-Create a plan using JSON format. For each step, include 'step', 'tool' (optional), and 'toolInput' (optional).
-Avoid using code blocks inside the descriptions to prevent parsing issues.
+Generate a structured action plan in JSON format. Each step should have:
+1. 'step': A description of the action.
+2. 'tool': (Optional) The tool name.
+3. 'toolInput': (Optional) JSON input for the tool.
 
 Available Tools:
-1. fileReadingTool: Reads a file. Input: {"filePath": "string"}`,
+- fileReadingTool: Reads a file. Input: {"filePath": "string"}
+
+Format the response as JSON with a 'plan' array.`,
 });
 
 const agenticTaskPlanningFlow = ai.defineFlow(
@@ -77,8 +63,9 @@ const agenticTaskPlanningFlow = ai.defineFlow(
     outputSchema: AgenticTaskPlanningOutputSchema,
   },
   async (input) => {
+    console.log(`Planning task: ${input.developmentTask}`);
     const { output } = await agenticTaskPlanningPrompt(input);
-    if (!output) throw new Error('No output from Ollama');
+    if (!output) throw new Error('No output from AI');
     return output;
   }
 );

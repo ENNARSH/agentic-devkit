@@ -2,7 +2,7 @@
 'use server';
 /**
  * @fileOverview This file implements the Genkit flow for indexing a project codebase using Ollama.
- * Updated to support granular indexing for progress reporting.
+ * Updated with server-side logging for debugging.
  */
 
 import {ai} from '@/ai/genkit';
@@ -29,13 +29,14 @@ const SingleFileSummarySchema = z.object({
  */
 export async function getFilesToProcess(projectPath: string): Promise<string[]> {
   const files: string[] = [];
-  const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build'];
+  const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build', '.firebase', 'out'];
   
   async function walk(currentDirPath: string) {
     let entries;
     try {
       entries = await fs.readdir(currentDirPath, { withFileTypes: true });
     } catch (error) {
+      console.error(`Error reading directory ${currentDirPath}:`, error);
       return;
     }
 
@@ -55,7 +56,9 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
     }
   }
   
+  console.log(`Starting scan of: ${projectPath}`);
   await walk(projectPath);
+  console.log(`Scan complete. Found ${files.length} indexable files.`);
   return files;
 }
 
@@ -77,11 +80,11 @@ Provide a concise semantic summary of the provided code file. Focus on what it d
 
 File Path: {{{filePath}}}
 
---- File Content ---
+--- File Content Start ---
 {{{fileContent}}}
---- End File Content ---
+--- File Content End ---
 
-Return JSON with 'semanticSummary' key.`,
+Return a JSON object with a single key 'semanticSummary'.`,
 });
 
 /**
@@ -89,26 +92,29 @@ Return JSON with 'semanticSummary' key.`,
  */
 export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputSchema>): Promise<z.infer<typeof SingleFileSummarySchema>> {
   const fullPath = path.join(input.projectPath, input.relativeFilePath);
-  const content = await fs.readFile(fullPath, 'utf-8');
   
-  const { output } = await summarizeCodeFilePrompt({
-    filePath: input.relativeFilePath,
-    fileContent: content,
-  });
+  try {
+    const content = await fs.readFile(fullPath, 'utf-8');
+    console.log(`Indexing file: ${input.relativeFilePath}...`);
+    
+    const { output } = await summarizeCodeFilePrompt({
+      filePath: input.relativeFilePath,
+      fileContent: content,
+    });
 
-  return {
-    filePath: input.relativeFilePath,
-    semanticSummary: output!.semanticSummary,
-  };
-}
+    if (!output) {
+      throw new Error(`Ollama returned no summary for ${input.relativeFilePath}`);
+    }
 
-// Keeping the original flow for compatibility if needed
-export async function aiCodebaseIndexing(input: z.infer<typeof ProjectIndexingInputSchema>) {
-  const files = await getFilesToProcess(input.projectPath);
-  const results = [];
-  for (const file of files) {
-    const summary = await indexFileSemantic({ projectPath: input.projectPath, relativeFilePath: file });
-    results.push(summary);
+    return {
+      filePath: input.relativeFilePath,
+      semanticSummary: output.semanticSummary,
+    };
+  } catch (error) {
+    console.error(`Error indexing ${input.relativeFilePath}:`, error);
+    return {
+      filePath: input.relativeFilePath,
+      semanticSummary: "Error: Could not index this file.",
+    };
   }
-  return results;
 }
