@@ -25,7 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { getFilesToProcess, indexFileSemantic } from "@/ai/flows/ai-codebase-indexing";
+import { getFilesToProcess, indexFileSemantic, saveProjectIndex } from "@/ai/flows/ai-codebase-indexing";
 import { useToast } from "@/hooks/use-toast";
 
 export function ProjectSidebar() {
@@ -42,10 +42,7 @@ export function ProjectSidebar() {
     setProgress(0);
     setFiles([]);
     
-    console.log("%c[UI] Inizio processo di indicizzazione...", "color: #a855f7; font-weight: bold;");
-    
     try {
-      // Phase 1: Scan
       const fileList = await getFilesToProcess(projectPath);
       const total = fileList.length;
       
@@ -58,16 +55,11 @@ export function ProjectSidebar() {
         return;
       }
 
-      console.log(`%c[UI] Trovati ${total} file da elaborare.`, "color: #a855f7;");
-
       const indexedResults = [];
       
-      // Phase 2: Granular Indexing
       for (let i = 0; i < total; i++) {
         const relativePath = fileList[i];
         setCurrentFile(relativePath);
-        
-        console.log(`%c[UI] Passaggio al file ${i + 1}/${total}: ${relativePath}`, "color: #3b82f6;");
         
         try {
           const result = await indexFileSemantic({ 
@@ -76,22 +68,23 @@ export function ProjectSidebar() {
           });
           indexedResults.push(result);
           setFiles((prev) => [...prev, result]);
-          console.log(`%c[UI] File ${i + 1} completato con successo.`, "color: #10b981;");
         } catch (fileErr) {
-          console.error(`%c[UI] Errore su ${relativePath}`, "color: #ef4444;", fileErr);
+          console.error(`Error on ${relativePath}`, fileErr);
         }
         
         const nextProgress = Math.round(((i + 1) / total) * 100);
         setProgress(nextProgress);
       }
 
+      // PERSISTENCE: Save the index to a local file
+      await saveProjectIndex(indexedResults);
+
       toast({
         title: "Indexing Complete",
-        description: `Successfully indexed ${indexedResults.length} files.`,
+        description: `Successfully indexed and SAVED ${indexedResults.length} files.`,
       });
-      console.log("%c[UI] Indicizzazione terminata con successo!", "color: #10b981; font-weight: bold;");
     } catch (error) {
-      console.error("[UI] Errore critico durante l'indicizzazione:", error);
+      console.error("Indexing Failed:", error);
       toast({
         variant: "destructive",
         title: "Indexing Failed",

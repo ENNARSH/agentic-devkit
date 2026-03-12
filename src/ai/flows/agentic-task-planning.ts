@@ -2,11 +2,12 @@
 'use server';
 /**
  * @fileOverview This file defines a Genkit flow for generating a step-by-step plan.
- * Fixed parsing issues by avoiding backticks in the prompt template.
+ * Integrated with the project index for context-aware planning.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import { loadProjectIndex } from './ai-codebase-indexing';
 
 const AgenticTaskPlanningInputSchema = z.object({
   developmentTask: z
@@ -40,18 +41,25 @@ export type AgenticTaskPlanningOutput = z.infer<
 
 const agenticTaskPlanningPrompt = ai.definePrompt({
   name: 'agenticTaskPlanningPrompt',
-  input: { schema: AgenticTaskPlanningInputSchema },
+  input: { 
+    schema: z.object({
+      developmentTask: z.string(),
+      projectContext: z.string(),
+    }) 
+  },
   output: { schema: AgenticTaskPlanningOutputSchema },
   prompt: `You are an expert software architect.
-Task: {{{developmentTask}}}
+  
+Project Context (Summarized File structure):
+{{{projectContext}}}
 
-Generate a structured action plan in JSON format. Each step should have:
+User Task: {{{developmentTask}}}
+
+Generate a structured action plan in JSON format. Each step should refer to existing files from the context if applicable.
+Each step should have:
 1. 'step': A description of the action.
 2. 'tool': (Optional) The tool name.
 3. 'toolInput': (Optional) JSON input for the tool.
-
-Available Tools:
-- fileReadingTool: Reads a file. Input: {"filePath": "string"}
 
 Format the response as JSON with a 'plan' array.`,
 });
@@ -63,8 +71,18 @@ const agenticTaskPlanningFlow = ai.defineFlow(
     outputSchema: AgenticTaskPlanningOutputSchema,
   },
   async (input) => {
+    // Load existing index to provide context to the LLM
+    const projectIndex = await loadProjectIndex();
+    const projectContext = projectIndex.length > 0 
+      ? projectIndex.map(f => `- ${f.filePath}: ${f.semanticSummary}`).join('\n')
+      : "No index available. The project hasn't been scanned yet.";
+
     console.log(`Planning task: ${input.developmentTask}`);
-    const { output } = await agenticTaskPlanningPrompt(input);
+    const { output } = await agenticTaskPlanningPrompt({
+      developmentTask: input.developmentTask,
+      projectContext: projectContext.substring(0, 10000), // Limit context size
+    });
+
     if (!output) throw new Error('No output from AI');
     return output;
   }

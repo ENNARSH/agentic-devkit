@@ -2,7 +2,7 @@
 'use server';
 /**
  * @fileOverview This file implements the Genkit flow for indexing a project codebase using Ollama.
- * Updated to skip large files and lock files to prevent "fetch failed" errors.
+ * Handles file scanning, semantic summarization, and local persistence.
  */
 
 import {ai} from '@/ai/genkit';
@@ -24,15 +24,49 @@ const SingleFileSummarySchema = z.object({
   semanticSummary: z.string(),
 });
 
+const INDEX_CACHE_PATH = path.join(process.cwd(), 'src', 'data', 'project-index.json');
+
+/**
+ * Ensures the data directory exists.
+ */
+async function ensureDataDir() {
+  const dataDir = path.dirname(INDEX_CACHE_PATH);
+  try {
+    await fs.access(dataDir);
+  } catch {
+    await fs.mkdir(dataDir, { recursive: true });
+  }
+}
+
+/**
+ * Saves the indexed results to a local JSON file.
+ */
+export async function saveProjectIndex(indexData: any[]) {
+  await ensureDataDir();
+  await fs.writeFile(INDEX_CACHE_PATH, JSON.stringify(indexData, null, 2), 'utf-8');
+  console.log(`[INDEXER] Indice salvato con successo in ${INDEX_CACHE_PATH}`);
+}
+
+/**
+ * Loads the indexed results from the local JSON file.
+ */
+export async function loadProjectIndex(): Promise<any[]> {
+  try {
+    const data = await fs.readFile(INDEX_CACHE_PATH, 'utf-8');
+    return JSON.parse(data);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Gets a list of relative file paths to be indexed.
- * Filters out lock files and files that are too large.
  */
 export async function getFilesToProcess(projectPath: string): Promise<string[]> {
   const files: string[] = [];
   const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build', '.firebase', 'out'];
   const ignoreFiles = ['package-lock.json', 'yarn.lock', 'composer.lock', 'pnpm-lock.yaml'];
-  const MAX_FILE_SIZE = 50 * 1024; // 50KB limit for local AI processing
+  const MAX_FILE_SIZE = 50 * 1024; // 50KB limit
   
   async function walk(currentDirPath: string) {
     let entries;
@@ -60,7 +94,7 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
               files.push(path.relative(projectPath, fullPath));
             }
           } catch (e) {
-            // Ignora file inaccessibili
+            // Skip
           }
         }
       }
@@ -92,19 +126,11 @@ Content:
 {{{fileContent}}}`,
 });
 
-/**
- * Indexes a single file and returns its summary.
- */
 export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputSchema>): Promise<z.infer<typeof SingleFileSummarySchema>> {
   const fullPath = path.join(input.projectPath, input.relativeFilePath);
   
   try {
     const content = await fs.readFile(fullPath, 'utf-8');
-    const sizeKb = Math.round(Buffer.byteLength(content) / 1024);
-    
-    console.log(`[INDEXER] Elaborazione file: ${input.relativeFilePath} (${sizeKb} KB)...`);
-    
-    // Truncate content to avoid overwhelming the model
     const truncatedContent = content.length > 8000 ? content.substring(0, 8000) + "...[truncated]" : content;
     
     const { output } = await summarizeCodeFilePrompt({
@@ -112,24 +138,15 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
       fileContent: truncatedContent,
     });
 
-    if (!output) {
-      console.warn(`[INDEXER] Ollama non ha restituito un riassunto per: ${input.relativeFilePath}`);
-      return {
-        filePath: input.relativeFilePath,
-        semanticSummary: "Ollama returned an empty response for this file.",
-      };
-    }
-
-    console.log(`[INDEXER] Completato: ${input.relativeFilePath}`);
     return {
       filePath: input.relativeFilePath,
-      semanticSummary: output.semanticSummary,
+      semanticSummary: output?.semanticSummary || "No summary available.",
     };
   } catch (error) {
     console.error(`[INDEXER] ERRORE su ${input.relativeFilePath}:`, error);
     return {
       filePath: input.relativeFilePath,
-      semanticSummary: "Skipped due to error or timeout.",
+      semanticSummary: "Error processing this file.",
     };
   }
 }
