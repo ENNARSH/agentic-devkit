@@ -47,8 +47,8 @@ export function ProjectSidebar() {
       
       if (total === 0) {
         toast({
-          title: "No files found",
-          description: "No indexable files were found in the specified path.",
+          title: "Nessun file trovato",
+          description: "Non sono stati trovati file indicizzabili nel percorso specificato.",
         });
         setIsIndexing(false);
         return;
@@ -60,7 +60,7 @@ export function ProjectSidebar() {
         const relativePath = fileList[i];
         setCurrentFile(relativePath);
         
-        console.log(`[CLIENT] Indexing file ${i + 1}/${total}: ${relativePath}`);
+        console.log(`[CLIENT] Indicizzazione file ${i + 1}/${total}: ${relativePath}`);
         
         try {
           const result = await indexFileSemantic({ 
@@ -70,29 +70,31 @@ export function ProjectSidebar() {
           indexedResults.push(result);
           setFiles((prev) => [...prev, result]);
           
-          // Small delay to let Ollama "breathe" between requests
-          await new Promise(r => setTimeout(r, 200));
+          // Salvataggio progressivo ogni 10 file per permettere all'utente di vedere i risultati
+          if ((i + 1) % 10 === 0 || i === total - 1) {
+            await saveProjectIndex(indexedResults);
+          }
+
+          // Piccolo delay per non saturare Ollama
+          await new Promise(r => setTimeout(r, 100));
         } catch (fileErr) {
-          console.error(`Error on ${relativePath}`, fileErr);
+          console.error(`Errore su ${relativePath}`, fileErr);
         }
         
         const nextProgress = Math.round(((i + 1) / total) * 100);
         setProgress(nextProgress);
       }
 
-      // PERSISTENCE: Save the index to a local file
-      await saveProjectIndex(indexedResults);
-
       toast({
-        title: "Indexing Complete",
-        description: `Successfully indexed and SAVED ${indexedResults.length} files.`,
+        title: "Indicizzazione Completata",
+        description: `Salvati ${indexedResults.length} file nell'indice locale.`,
       });
     } catch (error) {
-      console.error("Indexing Failed:", error);
+      console.error("Errore fatale indicizzazione:", error);
       toast({
         variant: "destructive",
-        title: "Indexing Failed",
-        description: "An error occurred while scanning the project.",
+        title: "Errore Indicizzazione",
+        description: "Controlla i log nel terminale per maggiori dettagli.",
       });
     } finally {
       setIsIndexing(false);
@@ -121,7 +123,7 @@ export function ProjectSidebar() {
               <Input 
                 value={projectPath}
                 onChange={(e) => setProjectPath(e.target.value)}
-                placeholder="Project Directory..."
+                placeholder="Percorso assoluto progetto..."
                 className="h-8 text-xs bg-muted/30 border-none"
               />
               <Button 
@@ -131,7 +133,7 @@ export function ProjectSidebar() {
                 className="h-8 font-semibold w-full"
               >
                 {isIndexing ? <RefreshCw className="mr-2 h-3 w-3 animate-spin" /> : <FolderOpen className="mr-2 h-3 w-3" />}
-                {isIndexing ? "Indexing..." : "Index Project"}
+                {isIndexing ? "Indicizzazione..." : "Index Project"}
               </Button>
               
               {isIndexing && (
@@ -155,7 +157,7 @@ export function ProjectSidebar() {
           <SidebarMenu>
             {files.length === 0 && !isIndexing ? (
               <div className="px-4 py-8 text-center">
-                <p className="text-xs text-muted-foreground">Index a project to see files.</p>
+                <p className="text-xs text-muted-foreground">Indicizza un progetto per vedere i file.</p>
               </div>
             ) : (
               files.map((file, i) => (
@@ -176,7 +178,7 @@ export function ProjectSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton className="text-muted-foreground hover:text-primary">
               <Search className="h-4 w-4" />
-              <span>Global Search</span>
+              <span>Ricerca Globale</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

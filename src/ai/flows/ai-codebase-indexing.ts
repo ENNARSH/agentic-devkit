@@ -1,7 +1,7 @@
 'use server';
 /**
- * @fileOverview This file implements the Genkit flow for indexing a project codebase using Ollama.
- * Handles file scanning, semantic summarization, and local persistence.
+ * @fileOverview Gestione dell'indicizzazione semantica del codebase.
+ * Salva i risultati in src/data/project-index.json per persistenza locale.
  */
 
 import {ai} from '@/ai/genkit';
@@ -10,7 +10,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 
 const ProjectIndexingInputSchema = z.object({
-  projectPath: z.string().describe('The absolute path to the project directory to be indexed.'),
+  projectPath: z.string(),
 });
 
 const FileIndexingInputSchema = z.object({
@@ -25,9 +25,6 @@ const SingleFileSummarySchema = z.object({
 
 const INDEX_CACHE_PATH = path.join(process.cwd(), 'src', 'data', 'project-index.json');
 
-/**
- * Ensures the data directory exists.
- */
 async function ensureDataDir() {
   const dataDir = path.dirname(INDEX_CACHE_PATH);
   try {
@@ -37,18 +34,12 @@ async function ensureDataDir() {
   }
 }
 
-/**
- * Saves the indexed results to a local JSON file.
- */
 export async function saveProjectIndex(indexData: any[]) {
   await ensureDataDir();
   await fs.writeFile(INDEX_CACHE_PATH, JSON.stringify(indexData, null, 2), 'utf-8');
-  console.log(`[INDEXER] Indice salvato con successo in ${INDEX_CACHE_PATH}`);
+  console.log(`[INDEXER] Indice aggiornato: ${indexData.length} file salvati.`);
 }
 
-/**
- * Loads the indexed results from the local JSON file.
- */
 export async function loadProjectIndex(): Promise<any[]> {
   try {
     const data = await fs.readFile(INDEX_CACHE_PATH, 'utf-8');
@@ -58,14 +49,11 @@ export async function loadProjectIndex(): Promise<any[]> {
   }
 }
 
-/**
- * Gets a list of relative file paths to be indexed.
- */
 export async function getFilesToProcess(projectPath: string): Promise<string[]> {
   const files: string[] = [];
-  const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build', '.firebase', 'out'];
-  const ignoreFiles = ['package-lock.json', 'yarn.lock', 'composer.lock', 'pnpm-lock.yaml'];
-  const MAX_FILE_SIZE = 30 * 1024; // 30KB limit
+  const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build', '.firebase', 'out', 'vendor'];
+  const ignoreFiles = ['package-lock.json', 'yarn.lock', 'composer.lock', 'pnpm-lock.yaml', '.env', 'favicon.ico'];
+  const MAX_FILE_SIZE = 30 * 1024; // 30KB
   
   async function walk(currentDirPath: string) {
     let entries;
@@ -84,7 +72,7 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
         }
       } else if (entry.isFile()) {
         const fileExtension = path.extname(entry.name).toLowerCase();
-        const validExts = ['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css'];
+        const validExts = ['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css', '.php', '.py'];
         
         if (validExts.includes(fileExtension) && !ignoreFiles.includes(entry.name)) {
           try {
@@ -93,16 +81,14 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
               files.push(path.relative(projectPath, fullPath));
             }
           } catch (e) {
-            // Skip
+            // Ignora file non accessibili
           }
         }
       }
     }
   }
   
-  console.log(`[INDEXER] Avvio scansione progetto: ${projectPath}`);
   await walk(projectPath);
-  console.log(`[INDEXER] Scansione completata. Trovati ${files.length} file validi.`);
   return files;
 }
 
@@ -119,17 +105,17 @@ const summarizeCodeFilePrompt = ai.definePrompt({
       semanticSummary: z.string(),
     }),
   },
-  prompt: `You are a professional software engineer. Provide a 1-sentence summary of the following file.
+  prompt: `Sei un ingegnere del software esperto. Riassumi lo scopo del file seguente in UNA SOLA BREVE FRASE.
 
-File Path: {{{filePath}}}
-Content:
+Percorso File: {{{filePath}}}
+Contenuto:
 {{{fileContent}}}
 
-INSTRUCTIONS:
-1. Provide ONLY a JSON object.
-2. Do NOT provide the JSON schema definition.
-3. Use exactly this format: {"semanticSummary": "your summary here"}
-4. The summary must be a single short sentence.`,
+ISTRUZIONI TASSATIVE:
+1. Restituisci SOLO un oggetto JSON valido.
+2. NON includere descrizioni del formato o schemi.
+3. Formato: {"semanticSummary": "la tua descrizione qui"}
+4. Se non riesci a capire il file, scrivi "File sorgente del progetto."`,
 });
 
 export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputSchema>): Promise<z.infer<typeof SingleFileSummarySchema>> {
@@ -137,11 +123,10 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
   
   try {
     const content = await fs.readFile(fullPath, 'utf-8');
-    const truncatedContent = content.length > 3000 ? content.substring(0, 3000) + "...[truncated]" : content;
+    const truncatedContent = content.length > 3000 ? content.substring(0, 3000) + "...[troncato]" : content;
     
-    console.log(`[INDEXER] Elaborazione ${input.relativeFilePath}...`);
+    console.log(`[INDEXER] Analisi: ${input.relativeFilePath}`);
     
-    // Use a try-catch for the specific AI call to prevent one file from crashing the whole process
     try {
       const { output } = await summarizeCodeFilePrompt({
         filePath: input.relativeFilePath,
@@ -149,7 +134,7 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
       });
 
       if (!output || !output.semanticSummary) {
-        throw new Error('Missing semanticSummary in response');
+        throw new Error('Risposta AI malformata');
       }
 
       return {
@@ -157,17 +142,17 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
         semanticSummary: output.semanticSummary,
       };
     } catch (aiError) {
-      console.warn(`[INDEXER] Fallimento AI su ${input.relativeFilePath}, uso fallback.`);
+      console.warn(`[INDEXER] Fallback per ${input.relativeFilePath}`);
       return {
         filePath: input.relativeFilePath,
-        semanticSummary: `File ${path.extname(input.relativeFilePath)} nel progetto.`,
+        semanticSummary: `File sorgente ${path.extname(input.relativeFilePath)} nel progetto.`,
       };
     }
   } catch (error) {
-    console.error(`[INDEXER] ERRORE lettura file ${input.relativeFilePath}:`, error);
+    console.error(`[INDEXER] Errore lettura ${input.relativeFilePath}:`, error);
     return {
       filePath: input.relativeFilePath,
-      semanticSummary: "Error reading file content.",
+      semanticSummary: "Errore durante la lettura del file.",
     };
   }
 }
