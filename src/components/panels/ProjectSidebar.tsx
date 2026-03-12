@@ -3,11 +3,12 @@
 import * as React from "react";
 import { 
   FileCode, 
-  Search, 
   Cpu, 
   FolderOpen,
   RefreshCw,
-  FileSearch
+  FileSearch,
+  Database,
+  Check
 } from "lucide-react";
 import {
   Sidebar,
@@ -24,8 +25,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { getFilesToProcess, indexFileSemantic, saveProjectIndex } from "@/ai/flows/ai-codebase-indexing";
+import { getFilesToProcess, indexFileSemantic, saveProjectIndex, listIndexedProjects, loadProjectIndex } from "@/ai/flows/ai-codebase-indexing";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 export function ProjectSidebar() {
   const [projectPath, setProjectPath] = React.useState("C:\\Workspaces\\tecno-asset");
@@ -33,7 +35,30 @@ export function ProjectSidebar() {
   const [progress, setProgress] = React.useState(0);
   const [currentFile, setCurrentFile] = React.useState("");
   const [files, setFiles] = React.useState<any[]>([]);
+  const [availableProjects, setAvailableProjects] = React.useState<{name: string, fileName: string}[]>([]);
+  const [activeProject, setActiveProject] = React.useState<string | null>(null);
   const { toast } = useToast();
+
+  const refreshProjects = React.useCallback(async () => {
+    const projects = await listIndexedProjects();
+    setAvailableProjects(projects);
+  }, []);
+
+  React.useEffect(() => {
+    refreshProjects();
+  }, [refreshProjects]);
+
+  const handleSelectProject = async (projectName: string) => {
+    setActiveProject(projectName);
+    const indexData = await loadProjectIndex(projectName);
+    setFiles(indexData);
+    toast({
+      title: "Progetto Caricato",
+      description: `Il contesto per ${projectName} è ora attivo.`,
+    });
+    // Store active project in a way the agent can see it (simple localStorage for client-side persistence)
+    localStorage.setItem('activeProjectIndex', projectName);
+  };
 
   const handleIndex = async () => {
     if (!projectPath) return;
@@ -42,69 +67,42 @@ export function ProjectSidebar() {
     setFiles([]);
     
     try {
-      // Fase 1: Scansione
-      console.log(`[CLIENT] Inizio scansione in: ${projectPath}`);
       const fileList = await getFilesToProcess(projectPath);
       const total = fileList.length;
       
-      console.log(`[CLIENT] Scansione terminata. File trovati: ${total}`);
-      
       if (total === 0) {
-        toast({
-          title: "Nessun file trovato",
-          description: "Non sono stati trovati file indicizzabili nel percorso specificato.",
-        });
+        toast({ title: "Nessun file trovato", variant: "destructive" });
         setIsIndexing(false);
         return;
       }
 
       toast({
-        title: "Scansione Completata",
-        description: `Trovati ${total} file. Inizio indicizzazione semantica con Ollama...`,
+        title: "Inizio Indicizzazione",
+        description: `Trovati ${total} file. Analisi semantica in corso...`,
       });
 
       const indexedResults = [];
+      const projectName = projectPath.split(/[/\\]/).pop() || 'project-index';
       
-      // Fase 2: Indicizzazione Semantica (uno alla volta)
       for (let i = 0; i < total; i++) {
         const relativePath = fileList[i];
         setCurrentFile(relativePath);
+        const result = await indexFileSemantic({ projectPath, relativeFilePath: relativePath });
+        indexedResults.push(result);
+        setFiles((prev) => [...prev, result]);
         
-        try {
-          const result = await indexFileSemantic({ 
-            projectPath, 
-            relativeFilePath: relativePath 
-          });
-          indexedResults.push(result);
-          setFiles((prev) => [...prev, result]);
-          
-          // Salvataggio progressivo ogni 10 file per permettere all'utente di vedere i risultati
-          if ((i + 1) % 10 === 0 || i === total - 1) {
-            await saveProjectIndex(indexedResults);
-            console.log(`[CLIENT] Indice locale aggiornato (file ${i + 1}/${total})`);
-          }
-
-          // Piccolo delay per non saturare Ollama e permettere il refresh della UI
-          await new Promise(r => setTimeout(r, 100));
-        } catch (fileErr) {
-          console.error(`[CLIENT] Errore su ${relativePath}:`, fileErr);
+        if ((i + 1) % 10 === 0 || i === total - 1) {
+          await saveProjectIndex(indexedResults, projectName);
         }
-        
-        const nextProgress = Math.round(((i + 1) / total) * 100);
-        setProgress(nextProgress);
+        setProgress(Math.round(((i + 1) / total) * 100));
       }
 
-      toast({
-        title: "Indicizzazione Completata",
-        description: `Processati ${indexedResults.length} file correttamente.`,
-      });
+      toast({ title: "Indicizzazione Completata", description: "Indice salvato correttamente." });
+      refreshProjects();
+      setActiveProject(projectName);
+      localStorage.setItem('activeProjectIndex', projectName);
     } catch (error) {
-      console.error("Errore fatale indicizzazione:", error);
-      toast({
-        variant: "destructive",
-        title: "Errore Indicizzazione",
-        description: "Controlla i log nel terminale di Ollama/Nextjs.",
-      });
+      toast({ variant: "destructive", title: "Errore Indicizzazione" });
     } finally {
       setIsIndexing(false);
       setCurrentFile("");
@@ -126,31 +124,25 @@ export function ProjectSidebar() {
       
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-primary/70">Project Path</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-primary/70">Index New Project</SidebarGroupLabel>
           <SidebarGroupContent className="px-2 pb-2">
             <div className="flex flex-col gap-3">
               <Input 
                 value={projectPath}
                 onChange={(e) => setProjectPath(e.target.value)}
-                placeholder="Percorso assoluto progetto..."
+                placeholder="Path assoluto..."
                 className="h-8 text-xs bg-muted/30 border-none"
               />
-              <Button 
-                onClick={handleIndex} 
-                disabled={isIndexing}
-                size="sm" 
-                className="h-8 font-semibold w-full"
-              >
+              <Button onClick={handleIndex} disabled={isIndexing} size="sm" className="h-8 font-semibold w-full">
                 {isIndexing ? <RefreshCw className="mr-2 h-3 w-3 animate-spin" /> : <FolderOpen className="mr-2 h-3 w-3" />}
-                {isIndexing ? "Indicizzazione..." : "Index Project"}
+                {isIndexing ? "Indexing..." : "Index Project"}
               </Button>
-              
               {isIndexing && (
                 <div className="space-y-2 px-1">
                   <Progress value={progress} className="h-1.5" />
                   <div className="flex justify-between items-center text-[10px] text-muted-foreground">
                     <span className="truncate max-w-[120px]">{currentFile}</span>
-                    <span className="font-mono">{progress}%</span>
+                    <span>{progress}%</span>
                   </div>
                 </div>
               )}
@@ -160,20 +152,42 @@ export function ProjectSidebar() {
 
         <SidebarGroup>
           <SidebarGroupLabel className="flex items-center gap-2">
-            <FileSearch size={14} />
-            Files Explorer
+            <Database size={14} />
+            Available Projects
           </SidebarGroupLabel>
           <SidebarMenu>
-            {files.length === 0 && !isIndexing ? (
-              <div className="px-4 py-8 text-center">
-                <p className="text-xs text-muted-foreground">Indicizza un progetto per vedere i file.</p>
+            {availableProjects.map((p) => (
+              <SidebarMenuItem key={p.name}>
+                <SidebarMenuButton 
+                  onClick={() => handleSelectProject(p.name)}
+                  isActive={activeProject === p.name}
+                  className={cn(activeProject === p.name && "bg-primary/10 text-primary")}
+                >
+                  <Database className="h-4 w-4" />
+                  <span className="flex-1">{p.name}</span>
+                  {activeProject === p.name && <Check size={12} />}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="flex items-center gap-2">
+            <FileSearch size={14} />
+            Files in Project
+          </SidebarGroupLabel>
+          <SidebarMenu>
+            {files.length === 0 ? (
+              <div className="px-4 py-4 text-center">
+                <p className="text-[10px] text-muted-foreground italic">Nessun file caricato.</p>
               </div>
             ) : (
               files.map((file, i) => (
                 <SidebarMenuItem key={i}>
                   <SidebarMenuButton tooltip={file.filePath}>
-                    <FileCode className="h-4 w-4 text-accent" />
-                    <span>{file.filePath.split(/[/\\]/).pop()}</span>
+                    <FileCode className="h-4 w-4 text-accent/70" />
+                    <span className="text-[11px]">{file.filePath.split(/[/\\]/).pop()}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))
@@ -181,17 +195,6 @@ export function ProjectSidebar() {
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
-
-      <SidebarFooter className="p-4 border-t">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton className="text-muted-foreground hover:text-primary">
-              <Search className="h-4 w-4" />
-              <span>Ricerca Globale</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
     </Sidebar>
   );
 }

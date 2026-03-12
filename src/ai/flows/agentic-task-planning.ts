@@ -1,43 +1,24 @@
-
 'use server';
 /**
- * @fileOverview This file defines a Genkit flow for generating a step-by-step plan.
- * Integrated with the project index for context-aware planning.
+ * @fileOverview Flow per la generazione di piani d'azione basati sull'indice attivo.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { loadProjectIndex } from './ai-codebase-indexing';
+import { loadProjectIndex, listIndexedProjects } from './ai-codebase-indexing';
 
 const AgenticTaskPlanningInputSchema = z.object({
-  developmentTask: z
-    .string()
-    .describe('A natural language description of the development task.'),
+  developmentTask: z.string(),
+  projectName: z.string().optional(), // Permette di specificare quale progetto usare
 });
-export type AgenticTaskPlanningInput = z.infer<
-  typeof AgenticTaskPlanningInputSchema
->;
 
 const AgenticTaskPlanningOutputSchema = z.object({
-  plan: z
-    .array(
-      z.object({
-        step: z.string().describe('A description of the step.'),
-        tool: z
-          .string()
-          .optional()
-          .describe('The name of the tool to be used, if any.'),
-        toolInput: z
-          .any()
-          .optional()
-          .describe('The input parameters for the tool in JSON format.'),
-      })
-    )
-    .describe('A step-by-step plan to complete the development task.'),
+  plan: z.array(z.object({
+    step: z.string(),
+    tool: z.string().optional(),
+    toolInput: z.any().optional(),
+  })),
 });
-export type AgenticTaskPlanningOutput = z.infer<
-  typeof AgenticTaskPlanningOutputSchema
->;
 
 const agenticTaskPlanningPrompt = ai.definePrompt({
   name: 'agenticTaskPlanningPrompt',
@@ -48,48 +29,36 @@ const agenticTaskPlanningPrompt = ai.definePrompt({
     }) 
   },
   output: { schema: AgenticTaskPlanningOutputSchema },
-  prompt: `You are an expert software architect.
-  
-Project Context (Summarized File structure):
+  prompt: `Sei un architetto software esperto. Hai accesso alla struttura del progetto tramite il Contesto Progetto qui sotto.
+
+Contesto Progetto (File e loro scopo):
 {{{projectContext}}}
 
-User Task: {{{developmentTask}}}
+Richiesta Utente: {{{developmentTask}}}
 
-Generate a structured action plan in JSON format. Each step should refer to existing files from the context if applicable.
-Each step should have:
-1. 'step': A description of the action.
-2. 'tool': (Optional) The tool name.
-3. 'toolInput': (Optional) JSON input for the tool.
+Genera un piano d'azione dettagliato in JSON. Ogni passo deve fare riferimento ai file REALI presenti nel contesto sopra.
+Sii specifico, non generico. Se l'utente chiede di una funzione specifica, indica quale file modificare.
 
-Format the response as JSON with a 'plan' array.`,
+Rispondi SOLO con il JSON del piano.`,
 });
 
-const agenticTaskPlanningFlow = ai.defineFlow(
-  {
-    name: 'agenticTaskPlanningFlow',
-    inputSchema: AgenticTaskPlanningInputSchema,
-    outputSchema: AgenticTaskPlanningOutputSchema,
-  },
-  async (input) => {
-    // Load existing index to provide context to the LLM
-    const projectIndex = await loadProjectIndex();
-    const projectContext = projectIndex.length > 0 
-      ? projectIndex.map(f => `- ${f.filePath}: ${f.semanticSummary}`).join('\n')
-      : "No index available. The project hasn't been scanned yet.";
-
-    console.log(`Planning task: ${input.developmentTask}`);
-    const { output } = await agenticTaskPlanningPrompt({
-      developmentTask: input.developmentTask,
-      projectContext: projectContext.substring(0, 10000), // Limit context size
-    });
-
-    if (!output) throw new Error('No output from AI');
-    return output;
+export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlanningInputSchema>) {
+  // Carica l'ultimo progetto usato o quello specificato
+  let projectName = input.projectName;
+  if (!projectName) {
+    const projects = await listIndexedProjects();
+    projectName = projects.length > 0 ? projects[0].name : 'project-index';
   }
-);
 
-export async function agenticTaskPlanning(
-  input: AgenticTaskPlanningInput
-): Promise<AgenticTaskPlanningOutput> {
-  return agenticTaskPlanningFlow(input);
+  const projectIndex = await loadProjectIndex(projectName);
+  const projectContext = projectIndex.length > 0 
+    ? projectIndex.map(f => `- ${f.filePath}: ${f.semanticSummary}`).join('\n')
+    : "Nessun indice disponibile.";
+
+  const { output } = await agenticTaskPlanningPrompt({
+    developmentTask: input.developmentTask,
+    projectContext: projectContext.substring(0, 15000),
+  });
+
+  return output || { plan: [{ step: "Nessun piano generato. Indicizza il progetto prima." }] };
 }
