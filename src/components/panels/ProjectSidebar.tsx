@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -61,6 +60,8 @@ export function ProjectSidebar() {
         const relativePath = fileList[i];
         setCurrentFile(relativePath);
         
+        console.log(`[CLIENT] Indexing file ${i + 1}/${total}: ${relativePath}`);
+        
         try {
           const result = await indexFileSemantic({ 
             projectPath, 
@@ -68,6 +69,9 @@ export function ProjectSidebar() {
           });
           indexedResults.push(result);
           setFiles((prev) => [...prev, result]);
+          
+          // Small delay to let Ollama "breathe" between requests
+          await new Promise(r => setTimeout(r, 200));
         } catch (fileErr) {
           console.error(`Error on ${relativePath}`, fileErr);
         }

@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview This file implements the Genkit flow for indexing a project codebase using Ollama.
@@ -66,7 +65,7 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
   const files: string[] = [];
   const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build', '.firebase', 'out'];
   const ignoreFiles = ['package-lock.json', 'yarn.lock', 'composer.lock', 'pnpm-lock.yaml'];
-  const MAX_FILE_SIZE = 30 * 1024; // Ridotto a 30KB per maggiore stabilità con Ollama
+  const MAX_FILE_SIZE = 30 * 1024; // 30KB limit
   
   async function walk(currentDirPath: string) {
     let entries;
@@ -125,8 +124,9 @@ File Path: {{{filePath}}}
 Content:
 {{{fileContent}}}
 
-IMPORTANT: Your response must be a JSON object with exactly one key named "semanticSummary".
-Example format: {"semanticSummary": "Detailed description here"}`,
+IMPORTANT: Your response MUST be a JSON object with exactly one key named "semanticSummary". 
+Do NOT include any other text, explanations or backticks in your output.
+Example format: {"semanticSummary": "This file contains utility functions for date formatting."}`,
 });
 
 export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputSchema>): Promise<z.infer<typeof SingleFileSummarySchema>> {
@@ -134,7 +134,6 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
   
   try {
     const content = await fs.readFile(fullPath, 'utf-8');
-    // Tronchiamo in modo più aggressivo per evitare timeout su Ollama
     const truncatedContent = content.length > 4000 ? content.substring(0, 4000) + "...[truncated]" : content;
     
     console.log(`[INDEXER] Elaborazione ${input.relativeFilePath}...`);
@@ -143,13 +142,16 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
       fileContent: truncatedContent,
     });
 
+    if (!output || !output.semanticSummary) {
+      throw new Error('Ollama returned invalid JSON or missing key');
+    }
+
     return {
       filePath: input.relativeFilePath,
-      semanticSummary: output?.semanticSummary || "No summary available.",
+      semanticSummary: output.semanticSummary,
     };
   } catch (error) {
     console.error(`[INDEXER] ERRORE su ${input.relativeFilePath}:`, error);
-    // Non blocchiamo l'intero processo se un file fallisce
     return {
       filePath: input.relativeFilePath,
       semanticSummary: "Error processing this file. It might be too large or complex for the local LLM.",
