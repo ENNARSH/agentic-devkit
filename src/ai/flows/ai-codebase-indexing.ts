@@ -120,13 +120,16 @@ const summarizeCodeFilePrompt = ai.definePrompt({
     }),
   },
   prompt: `You are a professional software engineer. Provide a 1-sentence summary of the following file.
+
 File Path: {{{filePath}}}
 Content:
 {{{fileContent}}}
 
-IMPORTANT: Your response MUST be a JSON object with exactly one key named "semanticSummary". 
-Do NOT include any other text, explanations or backticks in your output.
-Example format: {"semanticSummary": "This file contains utility functions for date formatting."}`,
+INSTRUCTIONS:
+1. Provide ONLY a JSON object.
+2. Do NOT provide the JSON schema definition.
+3. Use exactly this format: {"semanticSummary": "your summary here"}
+4. The summary must be a single short sentence.`,
 });
 
 export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputSchema>): Promise<z.infer<typeof SingleFileSummarySchema>> {
@@ -134,27 +137,37 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
   
   try {
     const content = await fs.readFile(fullPath, 'utf-8');
-    const truncatedContent = content.length > 4000 ? content.substring(0, 4000) + "...[truncated]" : content;
+    const truncatedContent = content.length > 3000 ? content.substring(0, 3000) + "...[truncated]" : content;
     
     console.log(`[INDEXER] Elaborazione ${input.relativeFilePath}...`);
-    const { output } = await summarizeCodeFilePrompt({
-      filePath: input.relativeFilePath,
-      fileContent: truncatedContent,
-    });
+    
+    // Use a try-catch for the specific AI call to prevent one file from crashing the whole process
+    try {
+      const { output } = await summarizeCodeFilePrompt({
+        filePath: input.relativeFilePath,
+        fileContent: truncatedContent,
+      });
 
-    if (!output || !output.semanticSummary) {
-      throw new Error('Ollama returned invalid JSON or missing key');
+      if (!output || !output.semanticSummary) {
+        throw new Error('Missing semanticSummary in response');
+      }
+
+      return {
+        filePath: input.relativeFilePath,
+        semanticSummary: output.semanticSummary,
+      };
+    } catch (aiError) {
+      console.warn(`[INDEXER] Fallimento AI su ${input.relativeFilePath}, uso fallback.`);
+      return {
+        filePath: input.relativeFilePath,
+        semanticSummary: `File ${path.extname(input.relativeFilePath)} nel progetto.`,
+      };
     }
-
-    return {
-      filePath: input.relativeFilePath,
-      semanticSummary: output.semanticSummary,
-    };
   } catch (error) {
-    console.error(`[INDEXER] ERRORE su ${input.relativeFilePath}:`, error);
+    console.error(`[INDEXER] ERRORE lettura file ${input.relativeFilePath}:`, error);
     return {
       filePath: input.relativeFilePath,
-      semanticSummary: "Error processing this file. It might be too large or complex for the local LLM.",
+      semanticSummary: "Error reading file content.",
     };
   }
 }
