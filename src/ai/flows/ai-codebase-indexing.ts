@@ -52,7 +52,7 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
   const files: string[] = [];
   const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build', '.firebase', 'out', 'vendor', 'storage', 'public/vendor'];
   const ignoreFiles = ['package-lock.json', 'yarn.lock', 'composer.lock', 'pnpm-lock.yaml', '.env', 'favicon.ico', '.DS_Store'];
-  const MAX_FILE_SIZE = 100 * 1024; // Aumentato a 100KB
+  const MAX_FILE_SIZE = 50 * 1024; // 50KB per stabilità
   
   console.log(`[INDEXER] Avvio scansione progetto: ${projectPath}`);
   
@@ -86,8 +86,6 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
             const stats = await fs.stat(fullPath);
             if (stats.size <= MAX_FILE_SIZE) {
               files.push(relativePath);
-            } else {
-              console.log(`[INDEXER] Saltato (troppo grande: ${Math.round(stats.size/1024)}KB): ${relativePath}`);
             }
           } catch (e) {
             // Ignora file non accessibili
@@ -102,6 +100,7 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
   return files;
 }
 
+// Usiamo output di testo semplice per evitare confusione dello schema JSON in Ollama
 const summarizeCodeFilePrompt = ai.definePrompt({
   name: 'summarizeCodeFilePrompt',
   input: {
@@ -111,21 +110,14 @@ const summarizeCodeFilePrompt = ai.definePrompt({
     }),
   },
   output: {
-    schema: z.object({
-      semanticSummary: z.string(),
-    }),
+    format: 'text',
   },
-  prompt: `Sei un ingegnere del software esperto. Riassumi lo scopo del file seguente in UNA SOLA BREVE FRASE.
+  prompt: `Riassumi lo scopo di questo file in una singola breve frase (max 15 parole).
+Non aggiungere introduzioni, non usare markdown, scrivi solo il riassunto.
 
-Percorso File: {{{filePath}}}
+File: {{{filePath}}}
 Contenuto:
-{{{fileContent}}}
-
-ISTRUZIONI TASSATIVE:
-1. Restituisci SOLO un oggetto JSON valido.
-2. NON includere descrizioni del formato o lo schema JSON nella risposta.
-3. Formato richiesto: {"semanticSummary": "la tua descrizione qui"}
-4. Se non riesci a capire il file, scrivi "File sorgente del progetto."`,
+{{{fileContent}}}`,
 });
 
 export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputSchema>): Promise<z.infer<typeof SingleFileSummarySchema>> {
@@ -133,30 +125,27 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
   
   try {
     const content = await fs.readFile(fullPath, 'utf-8');
-    // Tronchiamo il contenuto per non saturare il contesto di Ollama
-    const truncatedContent = content.length > 3000 ? content.substring(0, 3000) + "...[troncato]" : content;
+    const truncatedContent = content.length > 2000 ? content.substring(0, 2000) : content;
     
     console.log(`[INDEXER] Analisi: ${input.relativeFilePath}`);
     
     try {
-      const { output } = await summarizeCodeFilePrompt({
+      const { text } = await summarizeCodeFilePrompt({
         filePath: input.relativeFilePath,
         fileContent: truncatedContent,
       });
 
-      if (!output || !output.semanticSummary) {
-        throw new Error('Risposta AI malformata');
-      }
+      const summary = text?.trim() || `File sorgente ${path.extname(input.relativeFilePath)}.`;
 
       return {
         filePath: input.relativeFilePath,
-        semanticSummary: output.semanticSummary,
+        semanticSummary: summary,
       };
     } catch (aiError) {
       console.warn(`[INDEXER] Errore AI per ${input.relativeFilePath}, uso fallback.`);
       return {
         filePath: input.relativeFilePath,
-        semanticSummary: `File sorgente ${path.extname(input.relativeFilePath)} nel progetto.`,
+        semanticSummary: `File sorgente nel progetto.`,
       };
     }
   } catch (error) {
