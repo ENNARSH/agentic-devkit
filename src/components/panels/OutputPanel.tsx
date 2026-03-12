@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Terminal, Activity, CheckCircle2, XCircle, Info } from "lucide-react";
+import { Terminal, Activity, CheckCircle2, Info } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -17,6 +17,7 @@ export function OutputPanel() {
 
   React.useEffect(() => {
     setMounted(true);
+    // Inizializziamo i log solo sul client per evitare errori di idratazione
     setLogs([
       { 
         type: "info", 
