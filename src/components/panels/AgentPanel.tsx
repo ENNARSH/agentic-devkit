@@ -23,9 +23,9 @@ export function AgentPanel() {
     {
       id: "welcome",
       role: "assistant",
-      content: "Indicizzazione completata! Ora conosco la struttura del tuo progetto. Cosa vuoi fare?",
+      content: "Pronto ad aiutarti! Seleziona un progetto dalla sidebar o chiedimi di analizzare qualcosa.",
       suggestions: [
-        "Spiegami come funziona il sistema di login",
+        "Quali sono i file principali del progetto?",
         "Quali sono i file che gestiscono i database?",
         "Crea un piano per aggiungere una nuova rotta API",
         "Trova dove viene definita la gestione degli errori"
@@ -44,6 +44,10 @@ export function AgentPanel() {
   const handleSubmit = async (text: string) => {
     if (!text.trim() || isLoading) return;
 
+    const activeProject = localStorage.getItem('activeProjectIndex');
+    console.log(`[DEBUG-CLIENT] Invio richiesta agente per progetto: ${activeProject || 'nessuno'}`);
+    console.log(`[DEBUG-CLIENT] Messaggio: "${text}"`);
+
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
@@ -55,21 +59,29 @@ export function AgentPanel() {
     setIsLoading(true);
 
     try {
-      const result = await agenticTaskPlanning({ developmentTask: text });
+      const result = await agenticTaskPlanning({ 
+        developmentTask: text,
+        projectName: activeProject || undefined 
+      });
       
+      console.log(`[DEBUG-CLIENT] Risposta ricevuta dall'agente:`, result);
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "Ecco un piano d'azione basato sull'analisi del tuo codebase:",
+        content: activeProject 
+          ? `Analisi completata per il progetto "${activeProject}":` 
+          : "Ecco cosa ho trovato nell'indice disponibile:",
         plan: result.plan,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
+      console.error(`[DEBUG-CLIENT] Errore chiamata agente:`, error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "Mi dispiace, ho avuto un problema nell'elaborare la tua richiesta. Assicurati che Ollama sia attivo e che il progetto sia stato indicizzato correttamente.",
+        content: "Ops! Qualcosa è andato storto. Verifica che Ollama sia attivo e che il progetto sia stato selezionato nella sidebar.",
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {

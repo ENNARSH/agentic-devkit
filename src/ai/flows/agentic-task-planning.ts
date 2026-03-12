@@ -9,7 +9,7 @@ import { loadProjectIndex, listIndexedProjects } from './ai-codebase-indexing';
 
 const AgenticTaskPlanningInputSchema = z.object({
   developmentTask: z.string(),
-  projectName: z.string().optional(), // Permette di specificare quale progetto usare
+  projectName: z.string().optional(), // Nome del progetto/file index da usare
 });
 
 const AgenticTaskPlanningOutputSchema = z.object({
@@ -31,34 +31,57 @@ const agenticTaskPlanningPrompt = ai.definePrompt({
   output: { schema: AgenticTaskPlanningOutputSchema },
   prompt: `Sei un architetto software esperto. Hai accesso alla struttura del progetto tramite il Contesto Progetto qui sotto.
 
+IMPORTANTE: Il contesto contiene l'elenco dei file REALI del progetto dell'utente. Usa queste informazioni per essere specifico.
+Se l'utente chiede quali sono i file principali, elenca quelli più rilevanti trovati nel contesto (es. controller, modelli, rotte).
+
 Contesto Progetto (File e loro scopo):
 {{{projectContext}}}
 
 Richiesta Utente: {{{developmentTask}}}
 
 Genera un piano d'azione dettagliato in JSON. Ogni passo deve fare riferimento ai file REALI presenti nel contesto sopra.
-Sii specifico, non generico. Se l'utente chiede di una funzione specifica, indica quale file modificare.
-
-Rispondi SOLO con il JSON del piano.`,
+Rispondi SOLO con il JSON del piano conforme allo schema richiesto.`,
 });
 
 export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlanningInputSchema>) {
-  // Carica l'ultimo progetto usato o quello specificato
+  console.log(`[AGENT] Ricevuta richiesta: "${input.developmentTask}"`);
+  
   let projectName = input.projectName;
+  
+  // Se non specificato, cerchiamo il primo progetto disponibile
   if (!projectName) {
     const projects = await listIndexedProjects();
     projectName = projects.length > 0 ? projects[0].name : 'project-index';
+    console.log(`[AGENT] Nessun progetto specificato, uso il default: ${projectName}`);
   }
 
+  console.log(`[AGENT] Caricamento indice per progetto: ${projectName}...`);
   const projectIndex = await loadProjectIndex(projectName);
-  const projectContext = projectIndex.length > 0 
-    ? projectIndex.map(f => `- ${f.filePath}: ${f.semanticSummary}`).join('\n')
-    : "Nessun indice disponibile.";
+  
+  if (projectIndex.length === 0) {
+    console.warn(`[AGENT] ATTENZIONE: L'indice per "${projectName}" è vuoto o mancante.`);
+    return { plan: [{ step: "Errore: Indice non trovato o vuoto. Assicurati di aver indicizzato il progetto." }] };
+  }
 
-  const { output } = await agenticTaskPlanningPrompt({
-    developmentTask: input.developmentTask,
-    projectContext: projectContext.substring(0, 15000),
-  });
+  console.log(`[AGENT] Indice caricato con successo (${projectIndex.length} file). Generazione contesto...`);
+  
+  // Costruiamo il contesto limitando i token (prendiamo i primi 200 file per sicurezza)
+  const projectContext = projectIndex
+    .slice(0, 200)
+    .map(f => `- ${f.filePath}: ${f.semanticSummary}`)
+    .join('\n');
 
-  return output || { plan: [{ step: "Nessun piano generato. Indicizza il progetto prima." }] };
+  try {
+    console.log(`[AGENT] Inviando prompt a Ollama...`);
+    const { output } = await agenticTaskPlanningPrompt({
+      developmentTask: input.developmentTask,
+      projectContext,
+    });
+    
+    console.log(`[AGENT] Risposta ricevuta da Ollama.`);
+    return output || { plan: [{ step: "L'AI non ha generato un piano valido." }] };
+  } catch (error) {
+    console.error(`[AGENT] ERRORE durante la generazione del piano:`, error);
+    throw error;
+  }
 }
