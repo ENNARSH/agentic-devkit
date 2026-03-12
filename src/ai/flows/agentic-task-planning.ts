@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Flow per la generazione di piani d'azione basati sull'indice attivo.
@@ -10,15 +11,6 @@ import { loadProjectIndex, listIndexedProjects } from './ai-codebase-indexing';
 const AgenticTaskPlanningInputSchema = z.object({
   developmentTask: z.string(),
   projectName: z.string().optional(),
-});
-
-const AgenticTaskPlanningOutputSchema = z.object({
-  content: z.string(),
-  plan: z.array(z.object({
-    step: z.string(),
-    tool: z.string().optional(),
-    toolInput: z.any().optional(),
-  })).optional(),
 });
 
 const agenticTaskPlanningPrompt = ai.definePrompt({
@@ -112,9 +104,16 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.error(`[AGENT] !!! ERRORE dopo ${duration}s:`, error.message);
     
+    let userFriendlyError = "Si è verificato un errore durante l'elaborazione.";
+    if (error.message.includes('memory')) {
+      userFriendlyError = "Errore di memoria: Il modello AI è troppo grande per il tuo PC. Prova a chiudere altre applicazioni o usa un modello più leggero come 'llama3.2:3b'.";
+    } else if (error.message.includes('fetch')) {
+      userFriendlyError = "Errore di connessione: Assicurati che Ollama sia attivo su http://localhost:11434.";
+    }
+
     return { 
-      content: "Si è verificato un errore durante l'elaborazione. Assicurati che Ollama sia attivo (http://localhost:11434) e che il modello 'llama3.1:latest' sia caricato correttamente.",
-      plan: [{ step: "Verifica stato di Ollama" }] 
+      content: userFriendlyError,
+      plan: [{ step: "Verifica stato di Ollama o cambia modello in src/ai/genkit.ts" }] 
     };
   }
 }
