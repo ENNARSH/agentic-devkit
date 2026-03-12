@@ -42,8 +42,12 @@ export function ProjectSidebar() {
     setFiles([]);
     
     try {
+      // Fase 1: Scansione
+      console.log(`[CLIENT] Inizio scansione in: ${projectPath}`);
       const fileList = await getFilesToProcess(projectPath);
       const total = fileList.length;
+      
+      console.log(`[CLIENT] Scansione terminata. File trovati: ${total}`);
       
       if (total === 0) {
         toast({
@@ -54,13 +58,17 @@ export function ProjectSidebar() {
         return;
       }
 
+      toast({
+        title: "Scansione Completata",
+        description: `Trovati ${total} file. Inizio indicizzazione semantica con Ollama...`,
+      });
+
       const indexedResults = [];
       
+      // Fase 2: Indicizzazione Semantica (uno alla volta)
       for (let i = 0; i < total; i++) {
         const relativePath = fileList[i];
         setCurrentFile(relativePath);
-        
-        console.log(`[CLIENT] Indicizzazione file ${i + 1}/${total}: ${relativePath}`);
         
         try {
           const result = await indexFileSemantic({ 
@@ -73,12 +81,13 @@ export function ProjectSidebar() {
           // Salvataggio progressivo ogni 10 file per permettere all'utente di vedere i risultati
           if ((i + 1) % 10 === 0 || i === total - 1) {
             await saveProjectIndex(indexedResults);
+            console.log(`[CLIENT] Indice locale aggiornato (file ${i + 1}/${total})`);
           }
 
-          // Piccolo delay per non saturare Ollama
+          // Piccolo delay per non saturare Ollama e permettere il refresh della UI
           await new Promise(r => setTimeout(r, 100));
         } catch (fileErr) {
-          console.error(`Errore su ${relativePath}`, fileErr);
+          console.error(`[CLIENT] Errore su ${relativePath}:`, fileErr);
         }
         
         const nextProgress = Math.round(((i + 1) / total) * 100);
@@ -87,14 +96,14 @@ export function ProjectSidebar() {
 
       toast({
         title: "Indicizzazione Completata",
-        description: `Salvati ${indexedResults.length} file nell'indice locale.`,
+        description: `Processati ${indexedResults.length} file correttamente.`,
       });
     } catch (error) {
       console.error("Errore fatale indicizzazione:", error);
       toast({
         variant: "destructive",
         title: "Errore Indicizzazione",
-        description: "Controlla i log nel terminale per maggiori dettagli.",
+        description: "Controlla i log nel terminale di Ollama/Nextjs.",
       });
     } finally {
       setIsIndexing(false);

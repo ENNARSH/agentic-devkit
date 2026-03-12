@@ -37,7 +37,6 @@ async function ensureDataDir() {
 export async function saveProjectIndex(indexData: any[]) {
   await ensureDataDir();
   await fs.writeFile(INDEX_CACHE_PATH, JSON.stringify(indexData, null, 2), 'utf-8');
-  console.log(`[INDEXER] Indice aggiornato: ${indexData.length} file salvati.`);
 }
 
 export async function loadProjectIndex(): Promise<any[]> {
@@ -54,6 +53,8 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
   const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build', '.firebase', 'out', 'vendor'];
   const ignoreFiles = ['package-lock.json', 'yarn.lock', 'composer.lock', 'pnpm-lock.yaml', '.env', 'favicon.ico'];
   const MAX_FILE_SIZE = 30 * 1024; // 30KB
+  
+  console.log(`[INDEXER] Avvio scansione progetto: ${projectPath}`);
   
   async function walk(currentDirPath: string) {
     let entries;
@@ -89,6 +90,7 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
   }
   
   await walk(projectPath);
+  console.log(`[INDEXER] Scansione completata. Trovati ${files.length} file validi.`);
   return files;
 }
 
@@ -123,6 +125,7 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
   
   try {
     const content = await fs.readFile(fullPath, 'utf-8');
+    // Tronchiamo il contenuto per non saturare il contesto di Ollama
     const truncatedContent = content.length > 3000 ? content.substring(0, 3000) + "...[troncato]" : content;
     
     console.log(`[INDEXER] Analisi: ${input.relativeFilePath}`);
@@ -134,7 +137,7 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
       });
 
       if (!output || !output.semanticSummary) {
-        throw new Error('Risposta AI malformata');
+        throw new Error('Risposta AI malformata o vuota');
       }
 
       return {
@@ -142,7 +145,7 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
         semanticSummary: output.semanticSummary,
       };
     } catch (aiError) {
-      console.warn(`[INDEXER] Fallback per ${input.relativeFilePath}`);
+      console.warn(`[INDEXER] Errore AI per ${input.relativeFilePath}, uso fallback.`);
       return {
         filePath: input.relativeFilePath,
         semanticSummary: `File sorgente ${path.extname(input.relativeFilePath)} nel progetto.`,
