@@ -1,0 +1,10 @@
+{
+  "placeholderImages": [
+    {
+      "id": "ai-hero",
+      "description": "Abstract AI neural network visual representation",
+      "imageUrl": "https://picsum.photos/seed/ai-hero/1200/800",
+      "imageHint": "artificial intelligence neural network"
+    }
+  ]
+}
