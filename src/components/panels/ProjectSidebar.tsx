@@ -1,15 +1,14 @@
+
 "use client";
 
 import * as React from "react";
 import { 
-  FolderIcon, 
   FileCode, 
   Search, 
   Cpu, 
-  Plus, 
   FolderOpen,
-  ChevronRight,
-  RefreshCw
+  RefreshCw,
+  FileSearch
 } from "lucide-react";
 import {
   Sidebar,
@@ -25,24 +24,62 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { aiCodebaseIndexing } from "@/ai/flows/ai-codebase-indexing";
+import { Progress } from "@/components/ui/progress";
+import { getFilesToProcess, indexFileSemantic } from "@/ai/flows/ai-codebase-indexing";
 import { useToast } from "@/hooks/use-toast";
 
 export function ProjectSidebar() {
   const [projectPath, setProjectPath] = React.useState("C:\\Workspaces\\tecno-asset");
   const [isIndexing, setIsIndexing] = React.useState(false);
+  const [progress, setProgress] = React.useState(0);
+  const [currentFile, setCurrentFile] = React.useState("");
   const [files, setFiles] = React.useState<any[]>([]);
   const { toast } = useToast();
 
   const handleIndex = async () => {
     if (!projectPath) return;
     setIsIndexing(true);
+    setProgress(0);
+    setFiles([]);
+    
     try {
-      const result = await aiCodebaseIndexing({ projectPath });
-      setFiles(result);
+      // Phase 1: Scan
+      const fileList = await getFilesToProcess(projectPath);
+      const total = fileList.length;
+      
+      if (total === 0) {
+        toast({
+          title: "No files found",
+          description: "No indexable files were found in the specified path.",
+        });
+        setIsIndexing(false);
+        return;
+      }
+
+      const indexedResults = [];
+      
+      // Phase 2: Granular Indexing
+      for (let i = 0; i < total; i++) {
+        const relativePath = fileList[i];
+        setCurrentFile(relativePath);
+        
+        try {
+          const result = await indexFileSemantic({ 
+            projectPath, 
+            relativeFilePath: relativePath 
+          });
+          indexedResults.push(result);
+          setFiles((prev) => [...prev, result]);
+        } catch (fileErr) {
+          console.error(`Failed to index ${relativePath}`, fileErr);
+        }
+        
+        setProgress(Math.round(((i + 1) / total) * 100));
+      }
+
       toast({
         title: "Indexing Complete",
-        description: `Successfully indexed ${result.length} files.`,
+        description: `Successfully indexed ${indexedResults.length} files.`,
       });
     } catch (error) {
       toast({
@@ -52,6 +89,7 @@ export function ProjectSidebar() {
       });
     } finally {
       setIsIndexing(false);
+      setCurrentFile("");
     }
   };
 
@@ -72,7 +110,7 @@ export function ProjectSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel className="text-primary/70">Project Path</SidebarGroupLabel>
           <SidebarGroupContent className="px-2 pb-2">
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3">
               <Input 
                 value={projectPath}
                 onChange={(e) => setProjectPath(e.target.value)}
@@ -83,19 +121,32 @@ export function ProjectSidebar() {
                 onClick={handleIndex} 
                 disabled={isIndexing}
                 size="sm" 
-                className="h-8 font-semibold"
+                className="h-8 font-semibold w-full"
               >
                 {isIndexing ? <RefreshCw className="mr-2 h-3 w-3 animate-spin" /> : <FolderOpen className="mr-2 h-3 w-3" />}
                 {isIndexing ? "Indexing..." : "Index Project"}
               </Button>
+              
+              {isIndexing && (
+                <div className="space-y-2 px-1">
+                  <Progress value={progress} className="h-1.5" />
+                  <div className="flex justify-between items-center text-[10px] text-muted-foreground">
+                    <span className="truncate max-w-[120px]">{currentFile}</span>
+                    <span className="font-mono">{progress}%</span>
+                  </div>
+                </div>
+              )}
             </div>
           </SidebarGroupContent>
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel>Files Explorer</SidebarGroupLabel>
+          <SidebarGroupLabel className="flex items-center gap-2">
+            <FileSearch size={14} />
+            Files Explorer
+          </SidebarGroupLabel>
           <SidebarMenu>
-            {files.length === 0 ? (
+            {files.length === 0 && !isIndexing ? (
               <div className="px-4 py-8 text-center">
                 <p className="text-xs text-muted-foreground">Index a project to see files.</p>
               </div>
@@ -104,7 +155,7 @@ export function ProjectSidebar() {
                 <SidebarMenuItem key={i}>
                   <SidebarMenuButton tooltip={file.filePath}>
                     <FileCode className="h-4 w-4 text-accent" />
-                    <span>{file.filePath.split('/').pop()}</span>
+                    <span>{file.filePath.split(/[/\\]/).pop()}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))

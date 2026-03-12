@@ -2,6 +2,7 @@
 'use server';
 /**
  * @fileOverview This file implements the Genkit flow for indexing a project codebase using Ollama.
+ * Updated to support granular indexing for progress reporting.
  */
 
 import {ai} from '@/ai/genkit';
@@ -12,64 +13,51 @@ import * as path from 'path';
 const ProjectIndexingInputSchema = z.object({
   projectPath: z.string().describe('The absolute path to the project directory to be indexed.'),
 });
-export type ProjectIndexingInput = z.infer<typeof ProjectIndexingInputSchema>;
 
-const ProjectIndexingOutputSchema = z.array(
-  z.object({
-    filePath: z.string().describe('The relative path of the indexed file.'),
-    semanticSummary: z.string().describe('A semantic summary of the file content.'),
-  })
-);
-export type ProjectIndexingOutput = z.infer<typeof ProjectIndexingOutputSchema>;
+const FileIndexingInputSchema = z.object({
+  projectPath: z.string(),
+  relativeFilePath: z.string(),
+});
 
-const readProjectFilesTool = ai.defineTool(
-  {
-    name: 'readProjectFiles',
-    description: 'Recursively reads code files.',
-    inputSchema: z.object({
-      directoryPath: z.string().describe('The absolute path to the directory.'),
-    }),
-    outputSchema: z.array(
-      z.object({
-        filePath: z.string().describe('The absolute path to the file.'),
-        content: z.string().describe('The content of the file.'),
-      })
-    ),
-  },
-  async (input) => {
-    const filesToProcess: { filePath: string; content: string }[] = [];
-    const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build'];
-    
-    async function walk(currentDirPath: string) {
-      let entries;
-      try {
-        entries = await fs.readdir(currentDirPath, { withFileTypes: true });
-      } catch (error) {
-        return;
-      }
+const SingleFileSummarySchema = z.object({
+  filePath: z.string(),
+  semanticSummary: z.string(),
+});
 
-      for (const entry of entries) {
-        const fullPath = path.join(currentDirPath, entry.name);
-        if (entry.isDirectory()) {
-          if (!entry.name.startsWith('.') && !ignoreFolders.includes(entry.name)) {
-            await walk(fullPath);
-          }
-        } else if (entry.isFile()) {
-          const fileExtension = path.extname(entry.name).toLowerCase();
-          const validExts = ['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css'];
-          if (validExts.includes(fileExtension)) {
-            try {
-              const content = await fs.readFile(fullPath, 'utf-8');
-              filesToProcess.push({ filePath: fullPath, content });
-            } catch (readError) {}
-          }
+/**
+ * Gets a list of relative file paths to be indexed.
+ */
+export async function getFilesToProcess(projectPath: string): Promise<string[]> {
+  const files: string[] = [];
+  const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build'];
+  
+  async function walk(currentDirPath: string) {
+    let entries;
+    try {
+      entries = await fs.readdir(currentDirPath, { withFileTypes: true });
+    } catch (error) {
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(currentDirPath, entry.name);
+      if (entry.isDirectory()) {
+        if (!entry.name.startsWith('.') && !ignoreFolders.includes(entry.name)) {
+          await walk(fullPath);
+        }
+      } else if (entry.isFile()) {
+        const fileExtension = path.extname(entry.name).toLowerCase();
+        const validExts = ['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css'];
+        if (validExts.includes(fileExtension)) {
+          files.push(path.relative(projectPath, fullPath));
         }
       }
     }
-    await walk(input.directoryPath);
-    return filesToProcess;
   }
-);
+  
+  await walk(projectPath);
+  return files;
+}
 
 const summarizeCodeFilePrompt = ai.definePrompt({
   name: 'summarizeCodeFilePrompt',
@@ -96,36 +84,31 @@ File Path: {{{filePath}}}
 Return JSON with 'semanticSummary' key.`,
 });
 
-const aiCodebaseIndexingFlow = ai.defineFlow(
-  {
-    name: 'aiCodebaseIndexingFlow',
-    inputSchema: ProjectIndexingInputSchema,
-    outputSchema: ProjectIndexingOutputSchema,
-  },
-  async (input) => {
-    const allFilesWithContent = await readProjectFilesTool({ directoryPath: input.projectPath });
-    const indexedFiles: z.infer<typeof ProjectIndexingOutputSchema> = [];
+/**
+ * Indexes a single file and returns its summary.
+ */
+export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputSchema>): Promise<z.infer<typeof SingleFileSummarySchema>> {
+  const fullPath = path.join(input.projectPath, input.relativeFilePath);
+  const content = await fs.readFile(fullPath, 'utf-8');
+  
+  const { output } = await summarizeCodeFilePrompt({
+    filePath: input.relativeFilePath,
+    fileContent: content,
+  });
 
-    for (const file of allFilesWithContent) {
-      try {
-        const relativeFilePath = path.relative(input.projectPath, file.filePath);
-        const { output } = await summarizeCodeFilePrompt({
-          filePath: relativeFilePath,
-          fileContent: file.content,
-        });
-        indexedFiles.push({
-          filePath: relativeFilePath,
-          semanticSummary: output!.semanticSummary,
-        });
-      } catch (promptError) {
-        console.error(`Error summarizing file ${file.filePath}: ${promptError}`);
-      }
-    }
+  return {
+    filePath: input.relativeFilePath,
+    semanticSummary: output!.semanticSummary,
+  };
+}
 
-    return indexedFiles;
+// Keeping the original flow for compatibility if needed
+export async function aiCodebaseIndexing(input: z.infer<typeof ProjectIndexingInputSchema>) {
+  const files = await getFilesToProcess(input.projectPath);
+  const results = [];
+  for (const file of files) {
+    const summary = await indexFileSemantic({ projectPath: input.projectPath, relativeFilePath: file });
+    results.push(summary);
   }
-);
-
-export async function aiCodebaseIndexing(input: ProjectIndexingInput): Promise<ProjectIndexingOutput> {
-  return aiCodebaseIndexingFlow(input);
+  return results;
 }
