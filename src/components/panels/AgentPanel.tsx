@@ -1,19 +1,23 @@
 "use client";
 
 import * as React from "react";
-import { Send, Bot, User, Sparkles, Terminal, CheckCircle2, Search, Code2, ListChecks } from "lucide-react";
+import { Send, Bot, User, Sparkles, Terminal, Search, Code2, ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { agenticTaskPlanning, AgenticTaskPlanningOutput } from "@/ai/flows/agentic-task-planning";
+import { agenticTaskPlanning } from "@/ai/flows/agentic-task-planning";
 import { cn } from "@/lib/utils";
 
 type Message = {
   id: string;
   role: "user" | "assistant";
   content: string;
-  plan?: AgenticTaskPlanningOutput["plan"];
+  plan?: {
+    step: string;
+    tool?: string;
+    toolInput?: any;
+  }[];
   suggestions?: string[];
 };
 
@@ -23,12 +27,12 @@ export function AgentPanel() {
     {
       id: "welcome",
       role: "assistant",
-      content: "Pronto ad aiutarti! Seleziona un progetto dalla sidebar o chiedimi di analizzare qualcosa.",
+      content: "Pronto ad aiutarti! Seleziona un progetto dalla sidebar o chiedimi di analizzare qualcosa del tuo codice.",
       suggestions: [
         "Quali sono i file principali del progetto?",
-        "Quali sono i file che gestiscono i database?",
-        "Crea un piano per aggiungere una nuova rotta API",
-        "Trova dove viene definita la gestione degli errori"
+        "Dove viene gestita la connessione al database?",
+        "Crea un piano per aggiungere una nuova rotta",
+        "Trova i file che gestiscono i modali"
       ]
     },
   ]);
@@ -37,17 +41,18 @@ export function AgentPanel() {
 
   React.useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      const scrollContainer = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      }
     }
-  }, [messages]);
+  }, [messages, isLoading]);
 
   const handleSubmit = async (text: string) => {
     if (!text.trim() || isLoading) return;
 
     const activeProject = localStorage.getItem('activeProjectIndex');
-    console.log(`[DEBUG-CLIENT] Invio richiesta agente per progetto: ${activeProject || 'nessuno'}`);
-    console.log(`[DEBUG-CLIENT] Messaggio: "${text}"`);
-
+    
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
@@ -64,24 +69,19 @@ export function AgentPanel() {
         projectName: activeProject || undefined 
       });
       
-      console.log(`[DEBUG-CLIENT] Risposta ricevuta dall'agente:`, result);
-
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: activeProject 
-          ? `Analisi completata per il progetto "${activeProject}":` 
-          : "Ecco cosa ho trovato nell'indice disponibile:",
+        content: result.content,
         plan: result.plan,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
-      console.error(`[DEBUG-CLIENT] Errore chiamata agente:`, error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "Ops! Qualcosa è andato storto. Verifica che Ollama sia attivo e che il progetto sia stato selezionato nella sidebar.",
+        content: "Ops! Si è verificato un errore di comunicazione con l'AI. Verifica che Ollama sia in esecuzione.",
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -93,7 +93,7 @@ export function AgentPanel() {
     <div className="flex flex-col h-full bg-card/20">
       <div className="flex-1 overflow-hidden relative">
         <ScrollArea className="h-full px-6 py-8" ref={scrollRef}>
-          <div className="max-w-4xl mx-auto space-y-8">
+          <div className="max-w-4xl mx-auto space-y-8 pb-10">
             {messages.map((message) => (
               <div
                 key={message.id}
@@ -111,7 +111,7 @@ export function AgentPanel() {
                   {message.role === "assistant" ? <Bot size={18} /> : <User size={18} />}
                 </div>
                 <div className="flex-1 space-y-4">
-                  <div className="prose prose-invert max-w-none text-sm leading-relaxed">
+                  <div className="prose prose-invert max-w-none text-sm leading-relaxed whitespace-pre-wrap">
                     {message.content}
                   </div>
                   
@@ -134,6 +134,7 @@ export function AgentPanel() {
 
                   {message.plan && (
                     <div className="space-y-3 mt-4">
+                      <h4 className="text-[10px] font-bold uppercase tracking-widest text-primary/70 mb-2">Piano d'azione suggerito:</h4>
                       {message.plan.map((step, idx) => (
                         <div key={idx} className="flex gap-3 items-start p-4 rounded-lg bg-background/50 border border-border group hover:border-primary/30 transition-all hover:shadow-md">
                           <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">

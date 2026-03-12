@@ -9,15 +9,16 @@ import { loadProjectIndex, listIndexedProjects } from './ai-codebase-indexing';
 
 const AgenticTaskPlanningInputSchema = z.object({
   developmentTask: z.string(),
-  projectName: z.string().optional(), // Nome del progetto/file index da usare
+  projectName: z.string().optional(),
 });
 
 const AgenticTaskPlanningOutputSchema = z.object({
+  content: z.string(),
   plan: z.array(z.object({
     step: z.string(),
     tool: z.string().optional(),
     toolInput: z.any().optional(),
-  })),
+  })).optional(),
 });
 
 const agenticTaskPlanningPrompt = ai.definePrompt({
@@ -28,60 +29,67 @@ const agenticTaskPlanningPrompt = ai.definePrompt({
       projectContext: z.string(),
     }) 
   },
-  output: { schema: AgenticTaskPlanningOutputSchema },
-  prompt: `Sei un architetto software esperto. Hai accesso alla struttura del progetto tramite il Contesto Progetto qui sotto.
+  output: { format: 'text' },
+  prompt: `Sei un architetto software esperto. Hai accesso alla struttura del progetto tramite il Contesto Progetto.
 
-IMPORTANTE: Il contesto contiene l'elenco dei file REALI del progetto dell'utente. Usa queste informazioni per essere specifico.
-Se l'utente chiede quali sono i file principali, elenca quelli più rilevanti trovati nel contesto (es. controller, modelli, rotte).
-
-Contesto Progetto (File e loro scopo):
+Contesto Progetto (File reali del progetto dell'utente):
 {{{projectContext}}}
 
 Richiesta Utente: {{{developmentTask}}}
 
-Genera un piano d'azione dettagliato in JSON. Ogni passo deve fare riferimento ai file REALI presenti nel contesto sopra.
-Rispondi SOLO con il JSON del piano conforme allo schema richiesto.`,
+ISTRUZIONI:
+1. Analizza la richiesta dell'utente basandoti sui file reali elencati sopra.
+2. Fornisci una spiegazione testuale di cosa bisogna fare.
+3. Se appropriato, includi un piano d'azione in formato JSON alla fine della tua risposta, racchiuso tra tag <PLAN> e </PLAN>.
+4. Il JSON deve essere un array di oggetti con la chiave "step". Esempio: <PLAN>[{"step": "Modifica file X"}, {"step": "Aggiorna rotta Y"}]</PLAN>
+
+Rispondi in modo professionale e specifico.`,
 });
 
 export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlanningInputSchema>) {
-  console.log(`[AGENT] Ricevuta richiesta: "${input.developmentTask}"`);
+  console.log(`[AGENT] Richiesta: "${input.developmentTask}"`);
   
   let projectName = input.projectName;
-  
-  // Se non specificato, cerchiamo il primo progetto disponibile
   if (!projectName) {
     const projects = await listIndexedProjects();
     projectName = projects.length > 0 ? projects[0].name : 'project-index';
-    console.log(`[AGENT] Nessun progetto specificato, uso il default: ${projectName}`);
   }
 
-  console.log(`[AGENT] Caricamento indice per progetto: ${projectName}...`);
   const projectIndex = await loadProjectIndex(projectName);
   
-  if (projectIndex.length === 0) {
-    console.warn(`[AGENT] ATTENZIONE: L'indice per "${projectName}" è vuoto o mancante.`);
-    return { plan: [{ step: "Errore: Indice non trovato o vuoto. Assicurati di aver indicizzato il progetto." }] };
-  }
-
-  console.log(`[AGENT] Indice caricato con successo (${projectIndex.length} file). Generazione contesto...`);
-  
-  // Costruiamo il contesto limitando i token (prendiamo i primi 200 file per sicurezza)
-  const projectContext = projectIndex
-    .slice(0, 200)
-    .map(f => `- ${f.filePath}: ${f.semanticSummary}`)
-    .join('\n');
+  const projectContext = projectIndex.length > 0
+    ? projectIndex.slice(0, 150).map(f => `- ${f.filePath}: ${f.semanticSummary}`).join('\n')
+    : "Nessun indice disponibile. L'utente deve ancora indicizzare il progetto.";
 
   try {
-    console.log(`[AGENT] Inviando prompt a Ollama...`);
-    const { output } = await agenticTaskPlanningPrompt({
+    const { text } = await agenticTaskPlanningPrompt({
       developmentTask: input.developmentTask,
       projectContext,
     });
-    
-    console.log(`[AGENT] Risposta ricevuta da Ollama.`);
-    return output || { plan: [{ step: "L'AI non ha generato un piano valido." }] };
+
+    if (!text) throw new Error("L'AI non ha risposto.");
+
+    // Estrazione del piano JSON se presente
+    let plan = [];
+    const planMatch = text.match(/<PLAN>([\s\S]*?)<\/PLAN>/);
+    if (planMatch) {
+      try {
+        plan = JSON.parse(planMatch[1].trim());
+      } catch (e) {
+        console.warn("[AGENT] Errore parsing piano JSON, uso testo semplice.");
+      }
+    }
+
+    // Se non c'è un piano formale ma c'è testo, restituiamo il testo come contenuto principale
+    return {
+      content: text.replace(/<PLAN>[\s\S]*?<\/PLAN>/g, '').trim(),
+      plan: plan.length > 0 ? plan : undefined
+    };
   } catch (error) {
-    console.error(`[AGENT] ERRORE durante la generazione del piano:`, error);
-    throw error;
+    console.error(`[AGENT] ERRORE:`, error);
+    return { 
+      content: "Si è verificato un errore durante l'elaborazione. Assicurati che Ollama sia attivo.",
+      plan: [{ step: "Errore di connessione o timeout." }] 
+    };
   }
 }
