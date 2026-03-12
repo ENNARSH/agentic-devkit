@@ -5,11 +5,40 @@ import { Terminal, Activity, CheckCircle2, XCircle, Info } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+type LogEntry = {
+  type: string;
+  message: string;
+  timestamp: string;
+};
+
 export function OutputPanel() {
-  const [logs, setLogs] = React.useState([
-    { type: "info", message: "Agentic DevKit initialized.", timestamp: new Date().toLocaleTimeString() },
-    { type: "info", message: "Waiting for project indexing...", timestamp: new Date().toLocaleTimeString() },
-  ]);
+  const [logs, setLogs] = React.useState<LogEntry[]>([]);
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+    setLogs([
+      { 
+        type: "info", 
+        message: "Agentic DevKit initialized.", 
+        timestamp: new Date().toLocaleTimeString() 
+      },
+      { 
+        type: "info", 
+        message: "Waiting for project indexing...", 
+        timestamp: new Date().toLocaleTimeString() 
+      },
+    ]);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden bg-background">
+        <div className="h-10 border-b bg-muted/10" />
+        <div className="flex-1 bg-black/40" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -52,7 +81,7 @@ export function OutputPanel() {
                 <span className="text-xs font-semibold">Indexing Project</span>
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Project scanned. Semantic index built for 12 files in src/components.
+                Project scanned. Semantic index built for the current workspace.
               </p>
             </div>
             <div className="border border-border rounded-lg p-3 bg-muted/10">
@@ -61,7 +90,7 @@ export function OutputPanel() {
                 <span className="text-xs font-semibold">Semantic Search</span>
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                Searching for 'authentication flow' in indexed codebase... Found 2 matches.
+                Ready to perform semantic search across indexed files.
               </p>
             </div>
           </ScrollArea>
