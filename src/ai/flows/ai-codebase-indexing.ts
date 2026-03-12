@@ -2,7 +2,7 @@
 'use server';
 /**
  * @fileOverview This file implements the Genkit flow for indexing a project codebase using Ollama.
- * Updated with server-side logging for debugging.
+ * Updated to skip large files and lock files to prevent "fetch failed" errors.
  */
 
 import {ai} from '@/ai/genkit';
@@ -26,10 +26,13 @@ const SingleFileSummarySchema = z.object({
 
 /**
  * Gets a list of relative file paths to be indexed.
+ * Filters out lock files and files that are too large.
  */
 export async function getFilesToProcess(projectPath: string): Promise<string[]> {
   const files: string[] = [];
   const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build', '.firebase', 'out'];
+  const ignoreFiles = ['package-lock.json', 'yarn.lock', 'composer.lock', 'pnpm-lock.yaml'];
+  const MAX_FILE_SIZE = 50 * 1024; // 50KB limit for local AI processing
   
   async function walk(currentDirPath: string) {
     let entries;
@@ -49,14 +52,24 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
       } else if (entry.isFile()) {
         const fileExtension = path.extname(entry.name).toLowerCase();
         const validExts = ['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css'];
-        if (validExts.includes(fileExtension)) {
-          files.push(path.relative(projectPath, fullPath));
+        
+        if (validExts.includes(fileExtension) && !ignoreFiles.includes(entry.name)) {
+          try {
+            const stats = await fs.stat(fullPath);
+            if (stats.size <= MAX_FILE_SIZE) {
+              files.push(path.relative(projectPath, fullPath));
+            } else {
+              console.log(`Skipping large file: ${entry.name} (${Math.round(stats.size/1024)}KB)`);
+            }
+          } catch (e) {
+            console.error(`Could not stat file: ${fullPath}`);
+          }
         }
       }
     }
   }
   
-  console.log(`Starting scan of: ${projectPath}`);
+  console.log(`Scanning project directory: ${projectPath}`);
   await walk(projectPath);
   console.log(`Scan complete. Found ${files.length} indexable files.`);
   return files;
@@ -75,16 +88,10 @@ const summarizeCodeFilePrompt = ai.definePrompt({
       semanticSummary: z.string(),
     }),
   },
-  prompt: `You are an expert AI assistant specialized in summarizing codebases.
-Provide a concise semantic summary of the provided code file. Focus on what it does and why.
-
-File Path: {{{filePath}}}
-
---- File Content Start ---
-{{{fileContent}}}
---- File Content End ---
-
-Return a JSON object with a single key 'semanticSummary'.`,
+  prompt: `Provide a 1-sentence summary of this file. Focus on its main responsibility.
+File: {{{filePath}}}
+Content:
+{{{fileContent}}}`,
 });
 
 /**
@@ -95,15 +102,21 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
   
   try {
     const content = await fs.readFile(fullPath, 'utf-8');
-    console.log(`Indexing file: ${input.relativeFilePath}...`);
+    // Ensure we don't send massive content even if file passed size check
+    const truncatedContent = content.length > 10000 ? content.substring(0, 10000) + "...[truncated]" : content;
+    
+    console.log(`Ollama: Summarizing ${input.relativeFilePath}...`);
     
     const { output } = await summarizeCodeFilePrompt({
       filePath: input.relativeFilePath,
-      fileContent: content,
+      fileContent: truncatedContent,
     });
 
     if (!output) {
-      throw new Error(`Ollama returned no summary for ${input.relativeFilePath}`);
+      return {
+        filePath: input.relativeFilePath,
+        semanticSummary: "Ollama returned an empty response for this file.",
+      };
     }
 
     return {
@@ -111,10 +124,10 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
       semanticSummary: output.semanticSummary,
     };
   } catch (error) {
-    console.error(`Error indexing ${input.relativeFilePath}:`, error);
+    console.error(`Error processing ${input.relativeFilePath}:`, error);
     return {
       filePath: input.relativeFilePath,
-      semanticSummary: "Error: Could not index this file.",
+      semanticSummary: "Skipped due to error or timeout.",
     };
   }
 }
