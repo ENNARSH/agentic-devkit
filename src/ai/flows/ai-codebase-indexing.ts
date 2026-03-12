@@ -50,9 +50,9 @@ export async function loadProjectIndex(): Promise<any[]> {
 
 export async function getFilesToProcess(projectPath: string): Promise<string[]> {
   const files: string[] = [];
-  const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build', '.firebase', 'out', 'vendor'];
-  const ignoreFiles = ['package-lock.json', 'yarn.lock', 'composer.lock', 'pnpm-lock.yaml', '.env', 'favicon.ico'];
-  const MAX_FILE_SIZE = 30 * 1024; // 30KB
+  const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build', '.firebase', 'out', 'vendor', 'storage', 'public/vendor'];
+  const ignoreFiles = ['package-lock.json', 'yarn.lock', 'composer.lock', 'pnpm-lock.yaml', '.env', 'favicon.ico', '.DS_Store'];
+  const MAX_FILE_SIZE = 100 * 1024; // Aumentato a 100KB
   
   console.log(`[INDEXER] Avvio scansione progetto: ${projectPath}`);
   
@@ -67,19 +67,27 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
 
     for (const entry of entries) {
       const fullPath = path.join(currentDirPath, entry.name);
+      const relativePath = path.relative(projectPath, fullPath);
+
       if (entry.isDirectory()) {
         if (!entry.name.startsWith('.') && !ignoreFolders.includes(entry.name)) {
           await walk(fullPath);
         }
       } else if (entry.isFile()) {
         const fileExtension = path.extname(entry.name).toLowerCase();
-        const validExts = ['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css', '.php', '.py'];
+        const validExts = ['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css', '.php', '.py', '.html', '.sql', '.yaml', '.yml'];
         
-        if (validExts.includes(fileExtension) && !ignoreFiles.includes(entry.name)) {
+        if (validExts.includes(fileExtension)) {
+          if (ignoreFiles.includes(entry.name)) {
+            continue;
+          }
+          
           try {
             const stats = await fs.stat(fullPath);
             if (stats.size <= MAX_FILE_SIZE) {
-              files.push(path.relative(projectPath, fullPath));
+              files.push(relativePath);
+            } else {
+              console.log(`[INDEXER] Saltato (troppo grande: ${Math.round(stats.size/1024)}KB): ${relativePath}`);
             }
           } catch (e) {
             // Ignora file non accessibili
@@ -90,7 +98,7 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
   }
   
   await walk(projectPath);
-  console.log(`[INDEXER] Scansione completata. Trovati ${files.length} file validi.`);
+  console.log(`[INDEXER] Scansione completata. Trovati ${files.length} file indicizzabili.`);
   return files;
 }
 
@@ -115,8 +123,8 @@ Contenuto:
 
 ISTRUZIONI TASSATIVE:
 1. Restituisci SOLO un oggetto JSON valido.
-2. NON includere descrizioni del formato o schemi.
-3. Formato: {"semanticSummary": "la tua descrizione qui"}
+2. NON includere descrizioni del formato o lo schema JSON nella risposta.
+3. Formato richiesto: {"semanticSummary": "la tua descrizione qui"}
 4. Se non riesci a capire il file, scrivi "File sorgente del progetto."`,
 });
 
@@ -137,7 +145,7 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
       });
 
       if (!output || !output.semanticSummary) {
-        throw new Error('Risposta AI malformata o vuota');
+        throw new Error('Risposta AI malformata');
       }
 
       return {
