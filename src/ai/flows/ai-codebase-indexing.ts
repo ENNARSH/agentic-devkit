@@ -39,7 +39,7 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
     try {
       entries = await fs.readdir(currentDirPath, { withFileTypes: true });
     } catch (error) {
-      console.error(`Error reading directory ${currentDirPath}:`, error);
+      console.error(`[INDEXER] Errore lettura directory ${currentDirPath}:`, error);
       return;
     }
 
@@ -58,20 +58,18 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
             const stats = await fs.stat(fullPath);
             if (stats.size <= MAX_FILE_SIZE) {
               files.push(path.relative(projectPath, fullPath));
-            } else {
-              console.log(`Skipping large file: ${entry.name} (${Math.round(stats.size/1024)}KB)`);
             }
           } catch (e) {
-            console.error(`Could not stat file: ${fullPath}`);
+            // Ignora file inaccessibili
           }
         }
       }
     }
   }
   
-  console.log(`Scanning project directory: ${projectPath}`);
+  console.log(`[INDEXER] Avvio scansione progetto: ${projectPath}`);
   await walk(projectPath);
-  console.log(`Scan complete. Found ${files.length} indexable files.`);
+  console.log(`[INDEXER] Scansione completata. Trovati ${files.length} file validi.`);
   return files;
 }
 
@@ -102,10 +100,12 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
   
   try {
     const content = await fs.readFile(fullPath, 'utf-8');
-    // Ensure we don't send massive content even if file passed size check
-    const truncatedContent = content.length > 10000 ? content.substring(0, 10000) + "...[truncated]" : content;
+    const sizeKb = Math.round(Buffer.byteLength(content) / 1024);
     
-    console.log(`Ollama: Summarizing ${input.relativeFilePath}...`);
+    console.log(`[INDEXER] Elaborazione file: ${input.relativeFilePath} (${sizeKb} KB)...`);
+    
+    // Truncate content to avoid overwhelming the model
+    const truncatedContent = content.length > 8000 ? content.substring(0, 8000) + "...[truncated]" : content;
     
     const { output } = await summarizeCodeFilePrompt({
       filePath: input.relativeFilePath,
@@ -113,18 +113,20 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
     });
 
     if (!output) {
+      console.warn(`[INDEXER] Ollama non ha restituito un riassunto per: ${input.relativeFilePath}`);
       return {
         filePath: input.relativeFilePath,
         semanticSummary: "Ollama returned an empty response for this file.",
       };
     }
 
+    console.log(`[INDEXER] Completato: ${input.relativeFilePath}`);
     return {
       filePath: input.relativeFilePath,
       semanticSummary: output.semanticSummary,
     };
   } catch (error) {
-    console.error(`Error processing ${input.relativeFilePath}:`, error);
+    console.error(`[INDEXER] ERRORE su ${input.relativeFilePath}:`, error);
     return {
       filePath: input.relativeFilePath,
       semanticSummary: "Skipped due to error or timeout.",
