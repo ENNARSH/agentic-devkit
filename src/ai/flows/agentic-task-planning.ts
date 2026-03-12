@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview This file defines a Genkit flow for generating a step-by-step plan
@@ -43,13 +44,7 @@ export type AgenticTaskPlanningOutput = z.infer<
   typeof AgenticTaskPlanningOutputSchema
 >;
 
-// ===========================================================================
 // Tool Definitions
-// These tools are defined for the LLM to understand their capabilities
-// and plan their usage. Their actual execution is handled outside this flow.
-// ===========================================================================
-
-// Tool to read the content of a file
 const fileReadingTool = ai.defineTool(
   {
     name: 'fileReadingTool',
@@ -66,14 +61,11 @@ const fileReadingTool = ai.defineTool(
       .describe('The content of the file.'),
   },
   async (input) => {
-    // Dummy implementation for planning purposes.
-    // In a real application, this would interface with a file system service.
     console.log(`Simulating file read for: ${input.filePath}`);
     return { content: `Content of ${input.filePath} (simulated data)` };
   }
 );
 
-// Tool for contextual and semantic code search
 const codeSearchTool = ai.defineTool(
   {
     name: 'codeSearchTool',
@@ -100,9 +92,8 @@ const codeSearchTool = ai.defineTool(
       .describe('An array of relevant code snippets and their file paths.'),
   },
   async (input) => {
-    // Dummy implementation for planning purposes.
     console.log(
-      `Simulating code search for query: '${input.query}' with filter: '${input.fileFilter || 'none'}'`
+      `Simulating code search for query: '${input.query}'`
     );
     return [
       {
@@ -113,7 +104,6 @@ const codeSearchTool = ai.defineTool(
   }
 );
 
-// Tool for code navigation and semantic analysis
 const codeNavigationAnalysisTool = ai.defineTool(
   {
     name: 'codeNavigationAnalysisTool',
@@ -131,12 +121,12 @@ const codeNavigationAnalysisTool = ai.defineTool(
         })
         .optional()
         .describe(
-          'The specific location in the code for go_to_definition (if type is go_to_definition).'
+          'The specific location in the code for go_to_definition.'
         ),
       symbol: z
         .string()
         .optional()
-        .describe('The symbol to analyze for semantic analysis (if type is analyze_semantics).'),
+        .describe('The symbol to analyze for semantic analysis.'),
     }),
     outputSchema: z
       .object({
@@ -145,7 +135,6 @@ const codeNavigationAnalysisTool = ai.defineTool(
       .describe('The result of the navigation or analysis operation.'),
   },
   async (input) => {
-    // Dummy implementation for planning purposes.
     console.log(
       `Simulating code navigation/analysis for type: '${input.type}'`
     );
@@ -153,72 +142,34 @@ const codeNavigationAnalysisTool = ai.defineTool(
   }
 );
 
-// Genkit Prompt definition for the task planning agent
 const agenticTaskPlanningPrompt = ai.definePrompt({
   name: 'agenticTaskPlanningPrompt',
   input: { schema: AgenticTaskPlanningInputSchema },
   output: { schema: AgenticTaskPlanningOutputSchema },
-  tools: [fileReadingTool, codeSearchTool, codeNavigationAnalysisTool], // Register tools with the prompt
+  tools: [fileReadingTool, codeSearchTool, codeNavigationAnalysisTool],
   prompt: `You are an expert AI agent specialized in planning software development tasks. Your primary role is to analyze a given development task and generate a detailed, step-by-step action plan using the available tools.
 
-Each step in your plan should be clear and concise. If a tool is required for a step, you must specify its 'name' and provide the exact 'toolInput' as a JSON object, ensuring it conforms to the tool's expected input schema. Do not invent tools or parameters; use only the tools listed below.
+Each step in your plan should be clear and concise. If a tool is required for a step, you must specify its name and provide the exact toolInput as a JSON object.
 
 **Available Tools:**
 
 1.  **fileReadingTool**
-    -   **Description:** Reads the content of a specific file within the project.
-    -   **Input Schema:** 
-        \`\`\`json
-        {"filePath": "string"}
-        \`\`\`
+    -   **Description:** Reads the content of a specific file.
+    -   **Input Schema:** {"filePath": "string"}
 
 2.  **codeSearchTool**
-    -   **Description:** Performs a contextual and semantic search within the project's codebase to find relevant code snippets or definitions.
-    -   **Input Schema:** 
-        \`\`\`json
-        {"query": "string", "fileFilter": "string (optional)"}
-        \`\`\`
+    -   **Description:** Performs contextual search.
+    -   **Input Schema:** {"query": "string", "fileFilter": "string (optional)"}
 
 3.  **codeNavigationAnalysisTool**
-    -   **Description:** Provides advanced code navigation (e.g., go to definition) and semantic analysis for code understanding.
-    -   **Input Schema:** 
-        \`\`\`json
-        {"type": "go_to_definition" | "analyze_semantics", "target": {"filePath": "string", "lineNumber": "number", "columnNumber": "number"} (optional), "symbol": "string (optional)"}
-        \`\`\`
+    -   **Description:** Provides code navigation.
+    -   **Input Schema:** {"type": "go_to_definition" | "analyze_semantics"}
 
 **User's Development Task:** {{{developmentTask}}}
 
-Your response should be a JSON array of objects, where each object represents a step in the plan and must contain a 'step' string. Optionally, if a tool is used, it should also contain a 'tool' string and a 'toolInput' object. Example:
-
-\`\`\`json
-[
-  {
-    "step": "Understand the core requirements."
-  },
-  {
-    "step": "Search for existing relevant code related to user authentication.",
-    "tool": "codeSearchTool",
-    "toolInput": {
-      "query": "user authentication flow",
-      "fileFilter": "src/auth/**.ts"
-    }
-  },
-  {
-    "step": "Read the main authentication service file.",
-    "tool": "fileReadingTool",
-    "toolInput": {
-      "filePath": "src/auth/auth.service.ts"
-    }
-  },
-  {
-    "step": "Implement the new feature."
-  }
-]
-\`\`\`
-`,
+Your response should be a JSON array of objects representing steps. Each object must contain a 'step' string.`,
 });
 
-// Genkit Flow definition to execute the planning prompt
 const agenticTaskPlanningFlow = ai.defineFlow(
   {
     name: 'agenticTaskPlanningFlow',
@@ -226,20 +177,14 @@ const agenticTaskPlanningFlow = ai.defineFlow(
     outputSchema: AgenticTaskPlanningOutputSchema,
   },
   async (input) => {
-    // Call the prompt with the user's development task
     const { output } = await agenticTaskPlanningPrompt(input);
     if (!output) {
-      throw new Error('Failed to generate a valid plan from the LLM.');
+      throw new Error('Failed to generate a valid plan from Ollama.');
     }
     return output;
   }
 );
 
-/**
- * Generates a step-by-step plan for a given development task using AI agents and available tools.
- * @param input - An object containing the development task description.
- * @returns A promise that resolves to the generated step-by-step plan.
- */
 export async function agenticTaskPlanning(
   input: AgenticTaskPlanningInput
 ): Promise<AgenticTaskPlanningOutput> {

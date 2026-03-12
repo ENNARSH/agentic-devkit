@@ -1,7 +1,12 @@
-import {genkit} from 'genkit';
-import {googleAI} from '@genkit-ai/google-genai';
+
+import { genkit } from 'genkit';
+import { ollama } from 'genkitx-ollama';
 
 export const ai = genkit({
-  plugins: [googleAI()],
-  model: 'googleai/gemini-2.5-flash',
+  plugins: [
+    ollama({
+      serverAddress: 'http://localhost:11434', // Indirizzo standard di Ollama locale
+    }),
+  ],
+  model: 'ollama/llama3', // Modello predefinito da usare localmente
 });
