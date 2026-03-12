@@ -30,36 +30,44 @@ const agenticTaskPlanningPrompt = ai.definePrompt({
     }) 
   },
   output: { format: 'text' },
-  prompt: `Sei un architetto software esperto. Hai accesso alla struttura del progetto tramite il Contesto Progetto.
+  prompt: `Sei un architetto software esperto. Hai accesso alla struttura del progetto tramite il Contesto Progetto fornito.
 
-Contesto Progetto (File reali del progetto dell'utente):
+Contesto Progetto (File reali del progetto dell'utente con i loro scopi):
 {{{projectContext}}}
 
 Richiesta Utente: {{{developmentTask}}}
 
 ISTRUZIONI:
 1. Analizza la richiesta dell'utente basandoti sui file reali elencati sopra.
-2. Fornisci una spiegazione testuale di cosa bisogna fare.
-3. Se appropriato, includi un piano d'azione in formato JSON alla fine della tua risposta, racchiuso tra tag <PLAN> e </PLAN>.
-4. Il JSON deve essere un array di oggetti con la chiave "step". Esempio: <PLAN>[{"step": "Modifica file X"}, {"step": "Aggiorna rotta Y"}]</PLAN>
+2. Fornisci una spiegazione testuale chiara di cosa fa il codice o di come risolvere il problema.
+3. Se appropriato (es. per modifiche o nuovi task), includi un piano d'azione in formato JSON alla fine della tua risposta, racchiuso ESCLUSIVAMENTE tra tag <PLAN> e </PLAN>.
+4. Il JSON nel piano deve essere un array di oggetti con la chiave "step". Esempio: <PLAN>[{"step": "Modifica file X"}, {"step": "Aggiorna rotta Y"}]</PLAN>
 
-Rispondi in modo professionale e specifico.`,
+Rispondi in modo professionale, tecnico e specifico. Se ti viene chiesto cosa fa un file, cercalo nell'elenco sopra e descrivilo.`,
 });
 
 export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlanningInputSchema>) {
-  console.log(`[AGENT] Richiesta: "${input.developmentTask}"`);
+  const startTime = Date.now();
+  console.log(`\n[AGENT] >>> Nuova richiesta ricevuta: "${input.developmentTask}"`);
   
   let projectName = input.projectName;
   if (!projectName) {
+    console.log(`[AGENT] Nessun progetto specificato, cerco nell'elenco...`);
     const projects = await listIndexedProjects();
     projectName = projects.length > 0 ? projects[0].name : 'project-index';
   }
-
-  const projectIndex = await loadProjectIndex(projectName);
   
+  console.log(`[AGENT] Caricamento indice per: ${projectName}...`);
+  const projectIndex = await loadProjectIndex(projectName);
+  console.log(`[AGENT] Indice caricato: ${projectIndex.length} file trovati.`);
+  
+  // Prepariamo il contesto limitando per non sovraccaricare il modello locale
+  const contextLimit = 100; 
   const projectContext = projectIndex.length > 0
-    ? projectIndex.slice(0, 150).map(f => `- ${f.filePath}: ${f.semanticSummary}`).join('\n')
+    ? projectIndex.slice(0, contextLimit).map(f => `- ${f.filePath}: ${f.semanticSummary}`).join('\n')
     : "Nessun indice disponibile. L'utente deve ancora indicizzare il progetto.";
+
+  console.log(`[AGENT] Contesto preparato (${projectContext.length} caratteri). Invio richiesta a Ollama...`);
 
   try {
     const { text } = await agenticTaskPlanningPrompt({
@@ -67,29 +75,46 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
       projectContext,
     });
 
-    if (!text) throw new Error("L'AI non ha risposto.");
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`[AGENT] Risposta ricevuta da Ollama in ${duration}s.`);
 
-    // Estrazione del piano JSON se presente
+    if (!text) {
+      console.error(`[AGENT] Ollama ha restituito una risposta vuota.`);
+      throw new Error("L'AI non ha risposto.");
+    }
+
+    console.log(`[AGENT] Analisi risposta (primi 100 char): "${text.substring(0, 100).replace(/\n/g, ' ')}..."`);
+
+    // Estrazione del piano JSON se presente tramite tag <PLAN>
     let plan = [];
     const planMatch = text.match(/<PLAN>([\s\S]*?)<\/PLAN>/);
     if (planMatch) {
+      console.log(`[AGENT] Trovato blocco <PLAN>, inizio parsing JSON...`);
       try {
-        plan = JSON.parse(planMatch[1].trim());
+        const jsonContent = planMatch[1].trim();
+        plan = JSON.parse(jsonContent);
+        console.log(`[AGENT] Piano d'azione estratto con successo (${plan.length} step).`);
       } catch (e) {
-        console.warn("[AGENT] Errore parsing piano JSON, uso testo semplice.");
+        console.warn("[AGENT] Errore nel parsing del JSON nel blocco <PLAN>. Uso solo testo.");
       }
+    } else {
+      console.log(`[AGENT] Nessun blocco <PLAN> trovato nella risposta.`);
     }
 
-    // Se non c'è un piano formale ma c'è testo, restituiamo il testo come contenuto principale
+    const cleanContent = text.replace(/<PLAN>[\s\S]*?<\/PLAN>/g, '').trim();
+    console.log(`[AGENT] <<< Elaborazione completata.\n`);
+
     return {
-      content: text.replace(/<PLAN>[\s\S]*?<\/PLAN>/g, '').trim(),
+      content: cleanContent,
       plan: plan.length > 0 ? plan : undefined
     };
-  } catch (error) {
-    console.error(`[AGENT] ERRORE:`, error);
+  } catch (error: any) {
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.error(`[AGENT] !!! ERRORE dopo ${duration}s:`, error.message);
+    
     return { 
-      content: "Si è verificato un errore durante l'elaborazione. Assicurati che Ollama sia attivo.",
-      plan: [{ step: "Errore di connessione o timeout." }] 
+      content: "Si è verificato un errore durante l'elaborazione. Assicurati che Ollama sia attivo (http://localhost:11434) e che il modello 'llama3.1:latest' sia caricato correttamente.",
+      plan: [{ step: "Verifica stato di Ollama" }] 
     };
   }
 }
