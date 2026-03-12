@@ -66,7 +66,7 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
   const files: string[] = [];
   const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build', '.firebase', 'out'];
   const ignoreFiles = ['package-lock.json', 'yarn.lock', 'composer.lock', 'pnpm-lock.yaml'];
-  const MAX_FILE_SIZE = 50 * 1024; // 50KB limit
+  const MAX_FILE_SIZE = 30 * 1024; // Ridotto a 30KB per maggiore stabilità con Ollama
   
   async function walk(currentDirPath: string) {
     let entries;
@@ -120,10 +120,13 @@ const summarizeCodeFilePrompt = ai.definePrompt({
       semanticSummary: z.string(),
     }),
   },
-  prompt: `Provide a 1-sentence summary of this file. Focus on its main responsibility.
-File: {{{filePath}}}
+  prompt: `You are a professional software engineer. Provide a 1-sentence summary of the following file.
+File Path: {{{filePath}}}
 Content:
-{{{fileContent}}}`,
+{{{fileContent}}}
+
+IMPORTANT: Your response must be a JSON object with exactly one key named "semanticSummary".
+Example format: {"semanticSummary": "Detailed description here"}`,
 });
 
 export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputSchema>): Promise<z.infer<typeof SingleFileSummarySchema>> {
@@ -131,8 +134,10 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
   
   try {
     const content = await fs.readFile(fullPath, 'utf-8');
-    const truncatedContent = content.length > 8000 ? content.substring(0, 8000) + "...[truncated]" : content;
+    // Tronchiamo in modo più aggressivo per evitare timeout su Ollama
+    const truncatedContent = content.length > 4000 ? content.substring(0, 4000) + "...[truncated]" : content;
     
+    console.log(`[INDEXER] Elaborazione ${input.relativeFilePath}...`);
     const { output } = await summarizeCodeFilePrompt({
       filePath: input.relativeFilePath,
       fileContent: truncatedContent,
@@ -144,9 +149,10 @@ export async function indexFileSemantic(input: z.infer<typeof FileIndexingInputS
     };
   } catch (error) {
     console.error(`[INDEXER] ERRORE su ${input.relativeFilePath}:`, error);
+    // Non blocchiamo l'intero processo se un file fallisce
     return {
       filePath: input.relativeFilePath,
-      semanticSummary: "Error processing this file.",
+      semanticSummary: "Error processing this file. It might be too large or complex for the local LLM.",
     };
   }
 }
