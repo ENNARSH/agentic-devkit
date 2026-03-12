@@ -1,11 +1,11 @@
-
 'use server';
 /**
- * @fileOverview A Genkit flow for performing semantic code search within a project via Ollama.
+ * @fileOverview A Genkit flow for performing semantic code search within the local project index.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import {loadProjectIndex} from './ai-codebase-indexing';
 
 const SemanticCodeSearchInputSchema = z.object({
   query: z.string().describe('The natural language query for semantic code search.'),
@@ -15,40 +15,28 @@ export type SemanticCodeSearchInput = z.infer<typeof SemanticCodeSearchInputSche
 const SemanticCodeSearchOutputSchema = z.object({
   results: z.array(z.object({
     filePath: z.string(),
-    codeSnippet: z.string(),
-    explanation: z.string().optional(),
+    semanticSummary: z.string(),
+    score: z.number().optional(),
   })),
 });
 export type SemanticCodeSearchOutput = z.infer<typeof SemanticCodeSearchOutputSchema>;
 
-const codeSearchTool = ai.defineTool(
-  {
-    name: 'codeSearch',
-    description: 'Performs search.',
-    inputSchema: z.object({
-      query: z.string(),
-    }),
-    outputSchema: z.array(z.object({
-      filePath: z.string(),
-      codeSnippet: z.string(),
-    })),
-  },
-  async (input) => {
-    return [
-      {
-        filePath: 'src/utils/helpers.ts',
-        codeSnippet: '// Dummy result for local search',
-      },
-    ];
-  }
-);
-
 const semanticCodeSearchPrompt = ai.definePrompt({
   name: 'semanticCodeSearchPrompt',
-  input: {schema: SemanticCodeSearchInputSchema},
+  input: {
+    schema: z.object({
+      query: z.string(),
+      indexData: z.string(),
+    })
+  },
   output: {schema: SemanticCodeSearchOutputSchema},
-  tools: [codeSearchTool],
-  prompt: `Search the codebase for: "{{{query}}}" and present the findings. Return JSON with 'results' array.`,
+  prompt: `You are an expert developer assistant. 
+Based on the provided Project Index, find the most relevant files for the following query: "{{{query}}}"
+
+Project Index:
+{{{indexData}}}
+
+Return a JSON object with a 'results' array containing the top relevant files. Each result should include 'filePath' and 'semanticSummary'.`,
 });
 
 const semanticCodeSearchFlow = ai.defineFlow(
@@ -58,8 +46,21 @@ const semanticCodeSearchFlow = ai.defineFlow(
     outputSchema: SemanticCodeSearchOutputSchema,
   },
   async (input) => {
-    const {output} = await semanticCodeSearchPrompt(input);
-    return output!;
+    const index = await loadProjectIndex();
+    if (index.length === 0) {
+      return { results: [] };
+    }
+
+    // Pass the first 100 entries to avoid context window issues
+    const contextLimit = 100;
+    const indexData = index.slice(0, contextLimit).map(f => `- ${f.filePath}: ${f.semanticSummary}`).join('\n');
+
+    const {output} = await semanticCodeSearchPrompt({
+      query: input.query,
+      indexData
+    });
+
+    return output || { results: [] };
   }
 );
 

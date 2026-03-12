@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Send, Bot, User, Sparkles, Terminal, BookOpen, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Send, Bot, User, Sparkles, Terminal, CheckCircle2, Search, Code2, ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -14,6 +14,7 @@ type Message = {
   role: "user" | "assistant";
   content: string;
   plan?: AgenticTaskPlanningOutput["plan"];
+  suggestions?: string[];
 };
 
 export function AgentPanel() {
@@ -22,7 +23,13 @@ export function AgentPanel() {
     {
       id: "welcome",
       role: "assistant",
-      content: "Hello! I am your Agentic DevKit assistant. How can I help you with your project today? You can ask me to analyze code, find files, or plan complex development tasks.",
+      content: "Indicizzazione completata! Ora conosco la struttura del tuo progetto. Cosa vuoi fare?",
+      suggestions: [
+        "Spiegami come funziona il sistema di login",
+        "Quali sono i file che gestiscono i database?",
+        "Crea un piano per aggiungere una nuova rotta API",
+        "Trova dove viene definita la gestione degli errori"
+      ]
     },
   ]);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -34,14 +41,13 @@ export function AgentPanel() {
     }
   }, [messages]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
+  const handleSubmit = async (text: string) => {
+    if (!text.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: input,
+      content: text,
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -49,12 +55,12 @@ export function AgentPanel() {
     setIsLoading(true);
 
     try {
-      const result = await agenticTaskPlanning({ developmentTask: input });
+      const result = await agenticTaskPlanning({ developmentTask: text });
       
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "I've analyzed your request and prepared a step-by-step action plan:",
+        content: "Ecco un piano d'azione basato sull'analisi del tuo codebase:",
         plan: result.plan,
       };
 
@@ -63,7 +69,7 @@ export function AgentPanel() {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "I encountered an error while trying to process your request. Please ensure you've indexed the project first.",
+        content: "Mi dispiace, ho avuto un problema nell'elaborare la tua richiesta. Assicurati che Ollama sia attivo e che il progetto sia stato indicizzato correttamente.",
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -80,7 +86,7 @@ export function AgentPanel() {
               <div
                 key={message.id}
                 className={cn(
-                  "flex gap-4 p-4 rounded-xl border transition-all",
+                  "flex gap-4 p-5 rounded-xl border transition-all animate-in fade-in slide-in-from-bottom-2",
                   message.role === "assistant" 
                     ? "bg-secondary/20 border-border" 
                     : "bg-background border-primary/20 shadow-sm shadow-primary/5"
@@ -88,7 +94,7 @@ export function AgentPanel() {
               >
                 <div className={cn(
                   "h-8 w-8 rounded-full flex items-center justify-center shrink-0",
-                  message.role === "assistant" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
+                  message.role === "assistant" ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-accent text-accent-foreground"
                 )}>
                   {message.role === "assistant" ? <Bot size={18} /> : <User size={18} />}
                 </div>
@@ -97,30 +103,44 @@ export function AgentPanel() {
                     {message.content}
                   </div>
                   
+                  {message.suggestions && (
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      {message.suggestions.map((suggestion, i) => (
+                        <Button 
+                          key={i} 
+                          variant="outline" 
+                          size="sm" 
+                          className="text-[11px] h-7 bg-background/50 hover:bg-primary/10 hover:text-primary hover:border-primary/50"
+                          onClick={() => handleSubmit(suggestion)}
+                        >
+                          <Sparkles size={10} className="mr-1.5" />
+                          {suggestion}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+
                   {message.plan && (
                     <div className="space-y-3 mt-4">
                       {message.plan.map((step, idx) => (
-                        <div key={idx} className="flex gap-3 items-start p-3 rounded-lg bg-background/50 border border-border group hover:border-primary/50 transition-colors">
-                          <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                        <div key={idx} className="flex gap-3 items-start p-4 rounded-lg bg-background/50 border border-border group hover:border-primary/30 transition-all hover:shadow-md">
+                          <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                             {idx + 1}
                           </div>
                           <div className="flex-1">
-                            <p className="text-xs font-medium mb-1">{step.step}</p>
+                            <p className="text-xs font-medium mb-1 leading-snug">{step.step}</p>
                             {step.tool && (
-                              <div className="flex items-center gap-2 mt-2">
-                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-muted text-muted-foreground flex items-center gap-1">
+                              <div className="flex items-center gap-2 mt-3">
+                                <Badge variant="secondary" className="text-[10px] px-2 py-0.5 bg-muted/50 text-muted-foreground flex items-center gap-1.5 font-code">
                                   <Terminal size={10} /> {step.tool}
                                 </Badge>
-                                <span className="text-[10px] text-muted-foreground font-code truncate opacity-60">
-                                  {JSON.stringify(step.toolInput)}
-                                </span>
+                                {step.toolInput && (
+                                  <span className="text-[10px] text-muted-foreground font-code truncate opacity-60">
+                                    {typeof step.toolInput === 'string' ? step.toolInput : JSON.stringify(step.toolInput)}
+                                  </span>
+                                )}
                               </div>
                             )}
-                          </div>
-                          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button variant="ghost" size="icon" className="h-6 w-6 text-primary">
-                              <CheckCircle2 size={14} />
-                            </Button>
                           </div>
                         </div>
                       ))}
@@ -130,11 +150,11 @@ export function AgentPanel() {
               </div>
             ))}
             {isLoading && (
-              <div className="flex gap-4 p-4 rounded-xl border bg-secondary/20 border-border animate-pulse">
-                <div className="h-8 w-8 rounded-full bg-primary/50 shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-muted rounded w-3/4" />
-                  <div className="h-4 bg-muted rounded w-1/2" />
+              <div className="flex gap-4 p-5 rounded-xl border bg-secondary/20 border-border animate-pulse">
+                <div className="h-8 w-8 rounded-full bg-primary/30 shrink-0" />
+                <div className="flex-1 space-y-3">
+                  <div className="h-3 bg-muted rounded w-3/4" />
+                  <div className="h-3 bg-muted rounded w-1/2" />
                 </div>
               </div>
             )}
@@ -142,36 +162,44 @@ export function AgentPanel() {
         </ScrollArea>
       </div>
 
-      <div className="p-4 border-t bg-background/50 backdrop-blur-sm">
-        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto relative group">
+      <div className="p-6 border-t bg-background/80 backdrop-blur-md">
+        <form 
+          onSubmit={(e) => { e.preventDefault(); handleSubmit(input); }} 
+          className="max-w-4xl mx-auto relative group"
+        >
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                handleSubmit(e);
+                handleSubmit(input);
               }
             }}
-            placeholder="Describe a task or ask about your code..."
-            className="min-h-[60px] pr-14 py-3 bg-muted/20 focus-visible:ring-primary/30 transition-all resize-none font-body text-sm"
+            placeholder="Chiedi all'agente di analizzare o pianificare qualcosa..."
+            className="min-h-[80px] pr-14 py-4 bg-muted/10 border-border/50 focus-visible:ring-primary/20 transition-all resize-none font-body text-sm rounded-xl"
           />
-          <div className="absolute right-3 bottom-3 flex gap-2">
+          <div className="absolute right-4 bottom-4 flex gap-2">
             <Button 
               type="submit" 
               size="icon" 
               disabled={isLoading || !input.trim()}
-              className="h-8 w-8 rounded-lg bg-primary hover:bg-primary/90 transition-all"
+              className="h-9 w-9 rounded-xl bg-primary hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
             >
-              <Send size={16} />
+              <Send size={18} />
             </Button>
           </div>
         </form>
-        <div className="mt-2 text-center">
-          <p className="text-[10px] text-muted-foreground tracking-wide flex items-center justify-center gap-2">
-            <Sparkles size={10} className="text-primary" />
-            AI agent can read, search and analyze your project context
-          </p>
+        <div className="mt-3 flex items-center justify-center gap-6">
+          <span className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+            <Search size={10} className="text-primary" /> Ricerca Semantica
+          </span>
+          <span className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+            <ListChecks size={10} className="text-primary" /> Agentic Planning
+          </span>
+          <span className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+            <Code2 size={10} className="text-primary" /> Analisi Codebase
+          </span>
         </div>
       </div>
     </div>
