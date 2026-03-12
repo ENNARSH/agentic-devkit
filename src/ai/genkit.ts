@@ -5,8 +5,8 @@ import { ollama } from 'genkitx-ollama';
 export const ai = genkit({
   plugins: [
     ollama({
-      serverAddress: 'http://localhost:11434', // Indirizzo standard di Ollama locale
+      serverAddress: 'http://localhost:11434',
     }),
   ],
-  model: 'ollama/llama3', // Modello predefinito da usare localmente
+  model: 'ollama/llama3',
 });
