@@ -1,0 +1,518 @@
+[
+  {
+    "filePath": "app\\Console\\Commands\\SendKmReminder.php",
+    "semanticSummary": "Invia promemoria di manutenzione periodica per assegnazioni di beni con tipo di proprietà \"Promiscuo\"."
+  },
+  {
+    "filePath": "app\\Console\\Commands\\SendReminderEmails.php",
+    "semanticSummary": "Lancia un comando console per inviare email di promozione per le linee di tempo degli attivi."
+  },
+  {
+    "filePath": "app\\Console\\Kernel.php",
+    "semanticSummary": "Il file `app\\Console\\Kernel.php` definisce i comandi console disponibili nell'applicazione e configura la pianificazione dei comandi."
+  },
+  {
+    "filePath": "app\\Http\\Controllers\\AssetAssignmentActionController.php",
+    "semanticSummary": "Il file `AssetAssignmentActionController.php` gestisce operazioni CRUD per assegnazioni di beni mobili, con validazioni, log, e-mails di notifica."
+  },
+  {
+    "filePath": "app\\Http\\Controllers\\AssetAssignmentController.php",
+    "semanticSummary": "Il file `AssetAssignmentController.php` definisce un controller per la gestione delle assegnazioni degli attivi, delegando la logica di business a `AssetAssignmentService`. Offre metodi per visualizzare, creare, mostrare e modificare assegnazioni di attivi."
+  },
+  {
+    "filePath": "app\\Http\\Controllers\\AssetAssignmentHistoriesController.php",
+    "semanticSummary": "Il file `AssetAssignmentHistoriesController.php` gestisce le operazioni CRUD per le storie di assegnazione degli attivi, interagendo con il modello `AssetAssignmentHistory` e `AssetAssignment`."
+  },
+  {
+    "filePath": "app\\Http\\Controllers\\AssetController.php",
+    "semanticSummary": "Il file `AssetController.php` gestisce le operazioni relative agli asset, come la visualizzazione della lista, la creazione, il salvataggio e l'esportazione in CSV. Inoltre, include funzionalità per la gestione delle assegnazioni degli asset e la notifica automatica per gli aggiornamenti."
+  },
+  {
+    "filePath": "app\\Http\\Controllers\\AssetDeadlineController.php",
+    "semanticSummary": "Il file `app\\Http\\Controllers\\AssetDeadlineController.php` gestisce le operazioni CRUD per le scadenze di attivi, inclusa la visualizzazione di tutte le scadenze, la creazione, la modifica, l'eliminazione e la gestione dello storico delle scadenze completate. Inoltre, invia email di promozione per le scadenze imminenti."
+  },
+  {
+    "filePath": "app\\Http\\Controllers\\AssetDeadlineHistoriesController.php",
+    "semanticSummary": "Il file `AssetDeadlineHistoriesController.php` gestisce le operazioni di fine e cancellazione delle storiche delle scadenze di attivo."
+  },
+  {
+    "filePath": "app\\Http\\Controllers\\AssetNotificationController.php",
+    "semanticSummary": "Il file `AssetNotificationController.php` definisce due metodi: `index` per recuperare tutte le notifiche dell'utente loggato e `showView` per visualizzare una vista con filtri avanzati per le notifiche."
+  },
+  {
+    "filePath": "app\\Http\\Controllers\\AssetTicketController.php",
+    "semanticSummary": "Il file `AssetTicketController.php` gestisce le operazioni CRUD per i ticket degli attivi, permettendo di visualizzare, creare, modificare e eliminare i ticket associati agli attivi."
+  },
+  {
+    "filePath": "app\\Http\\Controllers\\AttachmentController.php",
+    "semanticSummary": "Il file AttachmentController.php gestisce la rimozione dei file allegati, controllando la presenza del file sullo storage e poi eliminando il record corrispondente nel database."
+  },
+  {
+    "filePath": "app\\Http\\Controllers\\Auth\\LoginController.php",
+    "semanticSummary": "Il file `LoginController.php` gestisce il processo di login per gli utenti, permettendo l'accesso tramite email/password o Microsoft, e autenticando l'utente in base ai domini autorizzati."
+  },
+  {
+    "filePath": "app\\Http\\Controllers\\Auth\\LogoutController.php",
+    "semanticSummary": "Il file LogoutController.php gestisce il logout locale e invoca il logout Single Sign-On di Microsoft."
+  },
+  {
+    "filePath": "app\\Http\\Controllers\\CalendarController.php",
+    "semanticSummary": "Il file CalendarController.php definisce un controller per gestire la visualizzazione di un calendario delle assegnazioni degli asset."
+  },
+  {
+    "filePath": "app\\Http\\Controllers\\Controller.php",
+    "semanticSummary": "Il file `app\\Http\\Controllers\\Controller.php` definisce un abstract class `Controller` come spazio di nomi `App\\Http\\Controllers`."
+  },
+  {
+    "filePath": "app\\Http\\Controllers\\DashboardController.php",
+    "semanticSummary": "Il file `DashboardController.php` definisce il controller per la pagina di dashboard, gestendo la logica di ricerca e filtraggio degli asset in base al tipo di proprietà e alla ricerca."
+  },
+  {
+    "filePath": "app\\Http\\Controllers\\LogController.php",
+    "semanticSummary": "Il file LogController.php in Laravel gestisce la visualizzazione degli ultimi 100 log del sistema, estragendoli dal file di log laravel.log e formattandoli per essere visualizzati in una vista."
+  },
+  {
+    "filePath": "app\\Http\\Controllers\\UserController.php",
+    "semanticSummary": "Il file `app\\Http\\Controllers\\UserController.php` contiene una classe `UserController` che gestisce operazioni CRUD per gli utenti, inclusa la creazione, visualizzazione, modifica e cancellazione di utenti, gestione degli allegati e l'invio di password via email."
+  },
+  {
+    "filePath": "app\\Mail\\AssetAssignmentChanged.php",
+    "semanticSummary": "Il file `AssetAssignmentChanged.php` definisce una classe Mailable in Laravel per inviare una notifica di cambiamento di assegnazione di un asset, che può includere i dettagli dell'assegnazione e dell'asset nuovo, e l'email dell'amministratore."
+  },
+  {
+    "filePath": "app\\Mail\\AssetAssignmentCreated.php",
+    "semanticSummary": "Classe PHP per inviare email di notifica sull'assegnazione di un nuovo asset."
+  },
+  {
+    "filePath": "app\\Mail\\AssetAssignmentUpdated.php",
+    "semanticSummary": "Il file `AssetAssignmentUpdated.php` definisce una classe `Mailable` per inviare un'email di aggiornamento sull'assegnazione di un asset, utilizzando Laravel."
+  },
+  {
+    "filePath": "app\\Mail\\DeadlineReminder.php",
+    "semanticSummary": "Classe PHP che invia un'email di ricorda per una scadenza di asset, creando una notifica corrispondente e utilizzando una vista blade per il contenuto dell'email."
+  },
+  {
+    "filePath": "app\\Mail\\UpdateKmReminder.php",
+    "semanticSummary": "Classe Mailable per inviare una notifica di reminder per aggiornare i chilometraggi di un asset."
+  },
+  {
+    "filePath": "app\\Models\\Asset.php",
+    "semanticSummary": "Il file `app\\Models\\Asset.php` definisce un modello Eloquent per la gestione degli attivi, incluse funzionalità per le linee di tempo, assegnazioni, ticket e gestione dei file allegati."
+  },
+  {
+    "filePath": "app\\Models\\AssetAssignment.php",
+    "semanticSummary": "Il file `AssetAssignment.php` definisce un modello Eloquent per la gestione degli assegnamenti degli attivi, con attributi e metodi per formattare date e gestire relazioni con altri modelli."
+  },
+  {
+    "filePath": "app\\Models\\AssetAssignmentCheck.php",
+    "semanticSummary": "Il file AssetAssignmentCheck.php definisce un modello Eloquent per la verifica dell'assegnazione degli attivi."
+  },
+  {
+    "filePath": "app\\Models\\AssetAssignmentHistory.php",
+    "semanticSummary": "Modello Eloquent per gestire la storia dell'assegnazione degli asset."
+  },
+  {
+    "filePath": "app\\Models\\AssetDeadline.php",
+    "semanticSummary": "Riassunto tecnico del file:\n\nClasse Eloquent che rappresenta la tabella `asset_deadlines`, con relazioni con `asset`, `histories` e `notifications`."
+  },
+  {
+    "filePath": "app\\Models\\AssetDeadlineHistory.php",
+    "semanticSummary": "Il file `AssetDeadlineHistory.php` definisce un modello Eloquent per la tabella che registra la storia delle esecuzioni di date limite associate agli asset."
+  },
+  {
+    "filePath": "app\\Models\\AssetNotification.php",
+    "semanticSummary": "Il file app\\Models\\AssetNotification.php definisce un modello Eloquent per le notifiche degli asset, con attributi per la scadenza, i giorni di anticipo, l'email, il soggetto dell'email e note aggiuntive, e una relazione polimorfa con le scadenze degli asset."
+  },
+  {
+    "filePath": "app\\Models\\AssetTicket.php",
+    "semanticSummary": "Il file definisce un modello Eloquent per la gestione dei ticket di asset in un'applicazione Laravel."
+  },
+  {
+    "filePath": "app\\Models\\Attachment.php",
+    "semanticSummary": "Classe Eloquent per gestire gli allegati, con relazione polimorfa."
+  },
+  {
+    "filePath": "app\\Models\\User.php",
+    "semanticSummary": "Classe Eloquent per modelli utenti, definisce attributi mass-assignabili, chiavi nascoste e cast, e relazione polimorfa con allegati."
+  },
+  {
+    "filePath": "app\\Providers\\AppServiceProvider.php",
+    "semanticSummary": "Il file configura un servizio di bootstrapping per l'applicazione Laravel, imponendo il protocollo HTTPS in produzione e registrando un provider di autenticazione Microsoft con Socialite."
+  },
+  {
+    "filePath": "app\\Services\\AssetAssignmentService.php",
+    "semanticSummary": "Il file `AssetAssignmentService.php` contiene la logica di business per l'assegnazione degli attivi. Include metodi per ottenere i dati di indice, gestire gli aggiornamenti degli attivi e gestire le sovrapposizioni degli assegnamenti. Utilizza vari modelli e utility per le operazioni specifiche."
+  },
+  {
+    "filePath": "app\\Utils\\AssetAssignmentUtils.php",
+    "semanticSummary": "Contiene metodi utilità per manipolare date, cercare indici in array e estrarre informazioni da note."
+  },
+  {
+    "filePath": "app\\Utils\\AssetUtils.php",
+    "semanticSummary": "Rimuove le note riservate dagli asset per utenti non admin."
+  },
+  {
+    "filePath": "app\\View\\Components\\ModalButton.php",
+    "semanticSummary": "ModalButton è una classe componente Laravel che restituisce la vista 'components.modal-button'."
+  },
+  {
+    "filePath": "bootstrap\\app.php",
+    "semanticSummary": "Il file bootstrap/app.php configura un'applicazione Laravel, definendo il percorso base, routing, comandi console, middleware e gestione eccezioni."
+  },
+  {
+    "filePath": "bootstrap\\cache\\packages.php",
+    "semanticSummary": "Il file bootstrap/cache/packages.php contiene un array di servizi e alias caricati da Composer per un progetto Laravel."
+  },
+  {
+    "filePath": "bootstrap\\cache\\services.php",
+    "semanticSummary": "Il file bootstrap\\cache\\services.php contiene un array con providers e servizi chiave per un'applicazione Laravel, configurando componenti essenziali e opzionali."
+  },
+  {
+    "filePath": "bootstrap\\providers.php",
+    "semanticSummary": "File di configurazione dei provider di applicazione Laravel."
+  },
+  {
+    "filePath": "composer.json",
+    "semanticSummary": "Il file composer.json definisce le dipendenze e le configurazioni per un progetto Laravel, specificando PHP versione, pacchetti richiesti e sviluppato, script post-installazione e autoload."
+  },
+  {
+    "filePath": "config\\app.php",
+    "semanticSummary": "Il file config\\app.php definisce le impostazioni di base per un'applicazione Laravel, inclusi il nome, l'ambiente, il debug, l'URL, la timezone e le impostazioni di localizzazione."
+  },
+  {
+    "filePath": "config\\auth.php",
+    "semanticSummary": "Questo file di configurazione PHP per Laravel gestisce l'autenticazione degli utenti, definendo gli \"guards\", i \"providers\" e le opzioni per il reset delle password."
+  },
+  {
+    "filePath": "config\\cache.php",
+    "semanticSummary": "Il file `config\\cache.php` definisce le impostazioni di caching per un'applicazione Laravel, configurando diverse opzioni come lo storage di default, i diversi driver di caching e la prefissazione delle chiavi del cache."
+  },
+  {
+    "filePath": "config\\database.php",
+    "semanticSummary": "Il file config/database.php definisce le impostazioni di connessione al database, supportando SQLite, MySQL, MariaDB, PostgreSQL e SQL Server, gestendo anche le migrazioni e Redis."
+  },
+  {
+    "filePath": "config\\filesystems.php",
+    "semanticSummary": "Il file `config\\filesystems.php` configura diversi dischi di archiviazione per l'applicazione, specificando il driver, il percorso di base e altre opzioni per ciascuno di essi."
+  },
+  {
+    "filePath": "config\\logging.php",
+    "semanticSummary": "Il file config\\logging.php definisce le impostazioni di logging per l'applicazione Laravel, includendo canali come stack, single, daily, slack, papertrail, stderr, syslog e errorlog, con vari livelli di gravità e handler personalizzati."
+  },
+  {
+    "filePath": "config\\mail.php",
+    "semanticSummary": "Il file config\\mail.php configura i parametri per l'invio di email in un'applicazione Laravel, definendo il transporte, le impostazioni del server SMTP, le impostazioni di fallback e l'indirizzo \"From\" globale."
+  },
+  {
+    "filePath": "config\\queue.php",
+    "semanticSummary": "Il file config\\queue.php definisce le impostazioni per le connessioni e i comportamenti delle coda in un'applicazione Laravel."
+  },
+  {
+    "filePath": "config\\services.php",
+    "semanticSummary": "File di configurazione per servizi terze parti, definisce credenziali per Mailgun, Postmark, AWS, Slack e Microsoft."
+  },
+  {
+    "filePath": "config\\session.php",
+    "semanticSummary": "Il file config\\session.php definisce le impostazioni per la gestione delle sessioni in Laravel, includendo driver, durata, crittografia, cookie e altre opzioni di sicurezza."
+  },
+  {
+    "filePath": "database\\factories\\UserFactory.php",
+    "semanticSummary": "Il file UserFactory.php definisce una factory per creare istanze di modelli User in modo fittizio per il testing e lo sviluppo in Laravel."
+  },
+  {
+    "filePath": "database\\migrations\\0001_01_01_000000_create_users_table.php",
+    "semanticSummary": "Il file crea una tabella 'users' nel database con campi per id, nome, email, password, ruolo e timestamp."
+  },
+  {
+    "filePath": "database\\migrations\\0001_01_01_000001_create_cache_table.php",
+    "semanticSummary": "Questo file è una migrazione di database che crea due tabelle: \"cache\" e \"cache_locks\", per memorizzare i dati di cache e i lock associati."
+  },
+  {
+    "filePath": "database\\migrations\\0001_01_01_000002_create_jobs_table.php",
+    "semanticSummary": "Questo file contiene una migrazione per creare tre tabelle in un database: `jobs`, `job_batches`, e `failed_jobs`."
+  },
+  {
+    "filePath": "database\\migrations\\2025_09_01_140126_create_assets_table.php",
+    "semanticSummary": "Creazione e rimozione della tabella \"assets\" per gestire gli attivi."
+  },
+  {
+    "filePath": "database\\migrations\\2025_09_01_140127_create_asset_assignments_table.php",
+    "semanticSummary": "Il file crea una tabella \"asset_assignments\" per gestire gli assegnamenti degli attivi, con chiavi esterne e campi opzionali per data, ora e note."
+  },
+  {
+    "filePath": "database\\migrations\\2025_09_01_140127_create_asset_deadlines_table.php",
+    "semanticSummary": "Il file `2025_09_01_140127_create_asset_deadlines_table.php` crea una tabella `asset_deadlines` per gestire le date di scadenza degli asset, con relazioni e campi specifici per la gestione delle ricorrenze e dei timestamp."
+  },
+  {
+    "filePath": "database\\migrations\\2025_09_01_140127_create_asset_notifications_table.php",
+    "semanticSummary": "Il file crea una tabella per le notifiche degli attivi con campi per l'id, l'id della linea di tempo, i giorni di anticipo, l'indirizzo email, il soggetto email e note aggiuntive."
+  },
+  {
+    "filePath": "database\\migrations\\2025_09_01_140128_create_asset_assignment_checks_table.php",
+    "semanticSummary": "Il file crea una tabella `asset_assignment_checks` per verifiche di assegnazione degli attivi."
+  },
+  {
+    "filePath": "database\\migrations\\2025_09_01_140128_create_asset_assignment_histories_table.php",
+    "semanticSummary": "Il file crea una tabella per registrare lo storico delle assegnazioni degli asset, inclusi dettagli sull'assegnazione, data di restituzione, modifiche e note."
+  },
+  {
+    "filePath": "database\\migrations\\2025_09_01_140128_create_asset_deadline_histories_table.php",
+    "semanticSummary": "Il file crea una tabella per registrare le storie di scadenza degli attivi."
+  },
+  {
+    "filePath": "database\\migrations\\2025_09_01_140752_create_asset_tickets_table.php",
+    "semanticSummary": "Crea la tabella 'asset_tickets' con campi per id, asset_id, subject, notes, attachments, report_date, reporter_email e timestamps."
+  },
+  {
+    "filePath": "database\\migrations\\2025_09_04_101534_add_role_to_users_table.php",
+    "semanticSummary": "Questo file è una migrazione per aggiungere un campo 'role' di tipo ENUM ai record della tabella 'users' con valori 'admin' e 'user', e impostare il valore di default a 'user'."
+  },
+  {
+    "filePath": "database\\migrations\\2025_09_08_100556_add_notes_column_to_assets_table.php",
+    "semanticSummary": "Aggiunge una colonna JSON 'notes' alla tabella 'assets'."
+  },
+  {
+    "filePath": "database\\migrations\\2025_09_11_105000_convert_asset_assignments_to_datetime.php",
+    "semanticSummary": "Il file esegue migrazioni sul database per convertire date e orari in timestamp."
+  },
+  {
+    "filePath": "database\\migrations\\2025_11_10_083102_create_attachments_table.php",
+    "semanticSummary": "Il file crea una tabella \"attachments\" per gestire file allegati con relazione polimorfa."
+  },
+  {
+    "filePath": "database\\seeders\\DatabaseSeeder.php",
+    "semanticSummary": "Il file DatabaseSeeder.php inizializza il database inserendo un utente di test."
+  },
+  {
+    "filePath": "package.json",
+    "semanticSummary": "Il file package.json definisce una configurazione per un progetto Vite con TypeScript, inclusi script di sviluppo e build, e dipendenze di sviluppo e produzione."
+  },
+  {
+    "filePath": "public\\index.php",
+    "semanticSummary": "Questo file inizializza e gestisce una richiesta Laravel, carica le dipendenze e gestisce la modalità di manutenzione."
+  },
+  {
+    "filePath": "public\\js\\modal-manager.js",
+    "semanticSummary": "ModalManager è una libreria JavaScript per gestire modali in modo centralizzato. Supporta il caricamento di contenuti via AJAX, modali statici e la chiusura con vari metodi."
+  },
+  {
+    "filePath": "public\\phpinfo.php",
+    "semanticSummary": "Il file public/phpinfo.php contiene una chiamata alla funzione phpinfo() in PHP, il che mostra le informazioni di configurazione del server PHP."
+  },
+  {
+    "filePath": "README.md",
+    "semanticSummary": "Il file README.md descrive il progetto tecno-asset, una gestione aziendale per la flotta e gli asset. Include tabelle per anagrafica, scadenze, storico, notifiche, ticketing, assegnamenti e utenti. Il flusso principale prevede la creazione di asset, popolamento delle scadenze, gestione delle notifiche e assegnamenti. Le funzionalità sono implementate con artisan commands e cronjobs."
+  },
+  {
+    "filePath": "resources\\css\\app.css",
+    "semanticSummary": "Il file CSS `app.css` definisce lo stile dell'applicazione con vari componenti come card degli asset, bottoni, dashboard, FullCalendar in modalità scura e un sistema di modali centralizzati."
+  },
+  {
+    "filePath": "resources\\js\\app.js",
+    "semanticSummary": "Il file app.js importa il file bootstrap per inizializzare le funzionalità di Bootstrap nell'applicazione."
+  },
+  {
+    "filePath": "resources\\js\\bootstrap.js",
+    "semanticSummary": "Il file bootstrap.js importa axios e lo esporta per consentire richieste HTTP in applicazioni web."
+  },
+  {
+    "filePath": "resources\\lang\\en\\messages.php",
+    "semanticSummary": "Il file PHP contiene stringhe di traduzione per un'applicazione web, coperte diverse sezioni come dashboard, assegnamenti, deadline e asset."
+  },
+  {
+    "filePath": "resources\\lang\\it\\messages.php",
+    "semanticSummary": "Il file `messages.php` contiene traduzioni in italiano per diverse funzionalità, inclusi dashboard, utenti, asset, prenotazioni e manutenzioni, utilizzate in un sistema di gestione asset."
+  },
+  {
+    "filePath": "resources\\lang\\it\\validation.php",
+    "semanticSummary": "File PHP contenente definizioni di messaggi di errore per la convalida dei campi in italiano, inclusi attributi personalizzati e traduzioni degli attributi."
+  },
+  {
+    "filePath": "resources\\views\\assets\\create.blade.php",
+    "semanticSummary": "Il file `create.blade.php` è un template Blade per la creazione di un nuovo asset. Contiene una sezione di form per inserire dettagli sull'asset, inclusi label, tipo e numero di serie. Implementa la gestione dinamica dei campi basati su specifiche chiavi. Il form utilizza AJAX per inviare i dati al server, gestendo errori di validazione e aggiornando la pagina in caso di successo."
+  },
+  {
+    "filePath": "resources\\views\\assets\\edit.blade.php",
+    "semanticSummary": "Il file contiene un form per l'aggiornamento di un asset, inclusi campi per l'etichetta, il tipo di risorsa e il numero di serie. Implementa una funzione per aggiungere note personalizzate, gestisce i file allegati e fornisce un'intefaccia utente amministrativa."
+  },
+  {
+    "filePath": "resources\\views\\assets\\index.blade.php",
+    "semanticSummary": "Il file index.blade.php è una vista Blade per la gestione degli asset, che visualizza una tabella con i dettagli degli asset e fornisce opzioni di azione per gli utenti con ruolo amministratore."
+  },
+  {
+    "filePath": "resources\\views\\assets\\show.blade.php",
+    "semanticSummary": "Il file `show.blade.php` visualizza i dettagli di un asset, inclusi il tipo, il numero di serie, l'azienda, il reparto assegnato e le note, con opzioni per visualizzare allegati."
+  },
+  {
+    "filePath": "resources\\views\\asset_assignments\\create.blade.php",
+    "semanticSummary": "Il file `create.blade.php` è un template Blade per la creazione di assegnazioni di beni, che estende un layout e contiene un form per inserire dati come data di inizio e fine, note, e un pulsante di submit. Incluso script JavaScript per gestire la validazione e salvataggio dei dati."
+  },
+  {
+    "filePath": "resources\\views\\asset_assignments\\edit.blade.php",
+    "semanticSummary": "Il file edit.blade.php è una vista Laravel per l'editing di assegnazioni di asset. Mostra un form per modificare informazioni come la data di inizio/fine, assegnatario e note, con controlli per gli utenti con diversi livelli di accesso."
+  },
+  {
+    "filePath": "resources\\views\\asset_assignments\\index.blade.php",
+    "semanticSummary": "Il file index.blade.php definisce la vista dell'index per gli assegnamenti degli attivi, includendo moduli di creazione, gestione storica e gestione delle assegnazioni attuali e passate. Contiene anche logica di gestione di form e modale, gestione degli errori e aggiornamenti dell'interfaccia utente in risposta alle interazioni."
+  },
+  {
+    "filePath": "resources\\views\\asset_assignments\\show.blade.php",
+    "semanticSummary": "Il file `resources\\views\\asset_assignments\\show.blade.php` è una vista Blade di Laravel che visualizza i dettagli di un'assegnazione di beni. Mostra informazioni sull'assegnazione, l'asset assegnato, il destinatario, le date di inizio e fine, e allegati associati."
+  },
+  {
+    "filePath": "resources\\views\\asset_assignment_histories\\create.blade.php",
+    "semanticSummary": "Il file create.blade.php definisce la vista per creare una nuova storia di assegnazione di beni, includendo un form con campi per l'assegnazione, la data di ritorno effettiva, l'email dell'assegnato e note, con pulsanti per salvare e annullare l'operazione."
+  },
+  {
+    "filePath": "resources\\views\\asset_assignment_histories\\edit.blade.php",
+    "semanticSummary": "Il file `edit.blade.php` contiene una vista per modificare lo storico dell'assegnazione di beni, con form per selezionare l'assegnazione, la data di restituzione attuale, l'email del destinatario e note."
+  },
+  {
+    "filePath": "resources\\views\\asset_assignment_histories\\index.blade.php",
+    "semanticSummary": "Il file index.blade.php definisce un layout per la visualizzazione storico assegnazioni asset, con gestione degli utenti amministratori, tabella con dati e azioni, e form per visualizzazione, modifica e eliminazione di record."
+  },
+  {
+    "filePath": "resources\\views\\asset_assignment_histories\\show.blade.php",
+    "semanticSummary": "Il file `show.blade.php` visualizza i dettagli di un'assegnazione di beni, inclusi l'ID dell'assegnazione, la data di restituzione effettiva, l'email dell'assegnatario e eventuali note."
+  },
+  {
+    "filePath": "resources\\views\\asset_deadlines\\create.blade.php",
+    "semanticSummary": "Il file create.blade.php di Laravel è un template per la creazione di una deadline, estende un layout specifico e contiene un form per inserire i dettagli della deadline, inclusi l'asset, l'etichetta, la ricorrenza e la data di scadenza. Il form utilizza AJAX per il submit e gestisce gli errori di validazione."
+  },
+  {
+    "filePath": "resources\\views\\asset_deadlines\\edit.blade.php",
+    "semanticSummary": "Il file contiene una vista Blade per la modifica di una linea di tempo, includendo campi per l'asset, etichetta, ricorrenza e data di linea di tempo. Inoltre, fornisce un pulsante per aggiornare la linea di tempo e un altro per terminarla, con controlli per impedire l'editing di date e ore già passate."
+  },
+  {
+    "filePath": "resources\\views\\asset_deadlines\\index.blade.php",
+    "semanticSummary": "Il file index.blade.php definisce la pagina delle scadenze degli asset, includendo un titolo, un bottone per creare nuove scadenze, un messaggio di successo, e una tabella che visualizza le scadenze imminenti."
+  },
+  {
+    "filePath": "resources\\views\\asset_deadlines\\show.blade.php",
+    "semanticSummary": "Il file `show.blade.php` visualizza i dettagli di una linea di tempo di un patrimonio."
+  },
+  {
+    "filePath": "resources\\views\\asset_tickets\\create.blade.php",
+    "semanticSummary": "Il file `create.blade.php` è una vista Blade in Laravel che gestisce la creazione di nuovi ticket per asset, estendendo la layout principale (`layouts.app`) e includendo un form per inserire i dettagli del ticket."
+  },
+  {
+    "filePath": "resources\\views\\asset_tickets\\edit.blade.php",
+    "semanticSummary": "Edita un biglietto di asset esistente con form di input per aggiornare i dati del ticket."
+  },
+  {
+    "filePath": "resources\\views\\asset_tickets\\index.blade.php",
+    "semanticSummary": "Visualizza la lista dei ticket degli asset con opzioni di creazione, visualizzazione, modifica e eliminazione."
+  },
+  {
+    "filePath": "resources\\views\\asset_tickets\\show.blade.php",
+    "semanticSummary": "Il file `show.blade.php` è una vista Blade in Laravel che estende la struttura del layout `app.blade.php` e visualizza i dettagli di un ticket di asset, inclusi l'asset, il subject, le note, gli allegati, la data del report e l'email del segnalatore."
+  },
+  {
+    "filePath": "resources\\views\\assset_deadline_histories\\index.blade.php",
+    "semanticSummary": "Il file index.blade.php di Laravel gestisce l'interfaccia di visualizzazione della cronologia delle linee di obiettivo degli asset per gli utenti amministratori. Mostra una tabella con dettagli come ID, scadenza, data e ora di esecuzione, data di creazione e azioni (visualizza, modifica, elimina)."
+  },
+  {
+    "filePath": "resources\\views\\auth\\login.blade.php",
+    "semanticSummary": "Il file `resources\\views\\auth\\login.blade.php` definisce la vista del form di accesso all'applicazione, inclusi campi per l'email e la password, messaggi di errore e successo, e un pulsante di invio."
+  },
+  {
+    "filePath": "resources\\views\\calendar\\calendar.blade.php",
+    "semanticSummary": "Il file `calendar.blade.php` estende la vista principale e gestisce il calendario e i filtri per gli asset. Utilizza JavaScript per gestire i filtri di proprietario e asset, e mostra dettagli degli eventi in una modale."
+  },
+  {
+    "filePath": "resources\\views\\components\\assignment-table.blade.php",
+    "semanticSummary": "Il file `assignment-table.blade.php` è un componente Blade di Laravel che visualizza una tabella delle assegnazioni di beni. Gli utenti possono visualizzare, modificare e annullare/tutelare assegnazioni in base ai loro privilegi."
+  },
+  {
+    "filePath": "resources\\views\\components\\menu.blade.php",
+    "semanticSummary": "Il file `menu.blade.php` è un componente Blade di Laravel che definisce un menu fixed a sinistra per l'interfaccia utente. Mostra icone per diverse funzionalità come la dashboard, il calendario, le scadenze, assegnamenti, notifiche e tickets. Incluso è anche il bottone per la disconnessione e lo switch per il tema scuro."
+  },
+  {
+    "filePath": "resources\\views\\components\\modal-button.blade.php",
+    "semanticSummary": "Il file `modal-button.blade.php` definisce un componente di bottone che apre una modale con un'icona di anteprima o modifica in base al tipo specificato (`show` o `edit`)."
+  },
+  {
+    "filePath": "resources\\views\\components\\modal.blade.php",
+    "semanticSummary": "Il file `modal.blade.php` definisce un componente di modal Bootstrap personalizzabile, con opzioni per ID, titolo, dimensione, chiusura e contenuto statico/AJAX."
+  },
+  {
+    "filePath": "resources\\views\\dashboard\\dashboard.blade.php",
+    "semanticSummary": "Il file contiene una dashboard per visualizzare e gestire gli asset. Mostra filtri, griglia di asset e modale per creare nuovi asset. Il codice include logica di autenticazione, form di ricerca e funzionalità di accordo per visualizzare note e azioni."
+  },
+  {
+    "filePath": "resources\\views\\emails\\asset_assignment_changed.blade.php",
+    "semanticSummary": "HTML email template notifying the user about a changed asset assignment."
+  },
+  {
+    "filePath": "resources\\views\\emails\\asset_assignment_created.blade.php",
+    "semanticSummary": "Il file \"asset_assignment_created.blade.php\" contiene un'email HTML che notifica l'utente di una nuova assegnazione di un asset, fornendo informazioni sull'asset assegnato, le date di inizio e fine, e l'email dell'assegnatore."
+  },
+  {
+    "filePath": "resources\\views\\emails\\asset_assignment_updated.blade.php",
+    "semanticSummary": "Template Blade per email di aggiornamento assegnazione asset."
+  },
+  {
+    "filePath": "resources\\views\\emails\\deadline_reminder.blade.php",
+    "semanticSummary": "Il file contiene un template email in Blade per promettere scadenza di un asset, visualizzando o chilometri rimanenti o data/ora di scadenza."
+  },
+  {
+    "filePath": "resources\\views\\emails\\km_reminder.blade.php",
+    "semanticSummary": "HTML per inviare un'email di ricordatorio per aggiornare i chilometraggi attuali di un asset."
+  },
+  {
+    "filePath": "resources\\views\\layouts\\app.blade.php",
+    "semanticSummary": "Il file app.blade.php è una vista layout di base per l'applicazione TECNO-ASSET, contenente struttura HTML, metadati, stili e script necessari."
+  },
+  {
+    "filePath": "resources\\views\\layouts\\modal.blade.php",
+    "semanticSummary": "Il file `modal.blade.php` è una vista di Blade per creare un layout di modello con Bootstrap 5, inclusi file CSS e JavaScript, che contiene un contenuto dinamico definito dalla sezione `@yield('content')`."
+  },
+  {
+    "filePath": "resources\\views\\logs\\index.blade.php",
+    "semanticSummary": "Il file `index.blade.php` visualizza una tabella di log del sistema, mostrando la data, il livello e il messaggio di ciascun log."
+  },
+  {
+    "filePath": "resources\\views\\notifications\\index.blade.php",
+    "semanticSummary": "Il file index.blade.php di Laravel contiene una vista per la gestione delle notifiche, con un form di filtraggio e una tabella che visualizza i dettagli delle notifiche."
+  },
+  {
+    "filePath": "resources\\views\\users\\edit.blade.php",
+    "semanticSummary": "Il file `edit.blade.php` è una vista di Laravel che gestisce la modifica di un utente. Visualizza un form per modificare i dettagli dell'utente e un elenco degli allegati associati. Il form include campi per il nome, l'email, la password e gli allegati. Il file contiene anche script JavaScript per gestire l'upload di file."
+  },
+  {
+    "filePath": "resources\\views\\users\\index.blade.php",
+    "semanticSummary": "Il file `index.blade.php` visualizza una lista di utenti in una tabella, con azioni di visualizzazione e modifica per ciascuno."
+  },
+  {
+    "filePath": "resources\\views\\users\\show.blade.php",
+    "semanticSummary": "Il file `show.blade.php` di Laravel visualizza i dettagli di un utente, inclusi nome, email, ruolo e allegati. Mantiene un layout con una card per l'utente e un'altra per i file allegati, utilizzando Blade templating. Il file include anche una modale per visualizzare i dettagli degli allegati in formato anteprima."
+  },
+  {
+    "filePath": "resources\\views\\welcome.blade.php",
+    "semanticSummary": "Il file `welcome.blade.php` contiene la struttura HTML e il codice PHP per la pagina di benvenuto di un'applicazione Laravel. Definisce il layout, i link esterni, stili CSS e JavaScript, e include una barra di navigazione per gli utenti autenticati e non autenticati. Il design utilizza Tailwind CSS e gestisce il tema scuro e chiaro."
+  },
+  {
+    "filePath": "routes\\console.php",
+    "semanticSummary": "Il file routes/console.php definisce un comando Artisan per visualizzare una citazione inspirante."
+  },
+  {
+    "filePath": "routes\\web.php",
+    "semanticSummary": "Il file web.php definisce rotte per autenticazione, dashboard, calendario, notifiche, assegnazioni di asset, gestione allegati e altre risorse nel sistema."
+  },
+  {
+    "filePath": "tests\\Feature\\ExampleTest.php",
+    "semanticSummary": "Il file ExampleTest.php è una classe di test unitario in PHP che verifica se l'applicazione restituisce una risposta di successo al raggiungimento della root route (\"/\")."
+  },
+  {
+    "filePath": "tests\\TestCase.php",
+    "semanticSummary": "Il file TestCase.php definisce una classe di base astratta per i test in un'applicazione Laravel, estendendo la classe TestCase di Laravel."
+  },
+  {
+    "filePath": "tests\\Unit\\ExampleTest.php",
+    "semanticSummary": "Riassunto tecnico: File di test unitario PHPUnit che verifica se la booleana vera rimane vera."
+  },
+  {
+    "filePath": "vite.config.js",
+    "semanticSummary": "Configurazione di Vite per progetti Laravel con supporto per Tailwind CSS e opzioni di server personalizzate."
+  }
+]
