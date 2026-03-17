@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 type Message = {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   content: string;
   plan?: {
     step: string;
@@ -24,12 +24,12 @@ export function AgentPanel() {
     {
       id: "welcome",
       role: "assistant",
-      content: "Pronto ad aiutarti! Seleziona un progetto e un modello dalla sidebar. Posso analizzare il codice e suggerire piani d'azione.",
+      content: "Pronto ad aiutarti! Seleziona un progetto e un modello dalla sidebar. Ho la memoria attiva: posso ricordare il contesto dei nostri discorsi.",
       suggestions: [
-        "Analizza il layout per smartphone",
-        "Spiegami come funziona la gestione sessioni",
-        "Trova potenziali bug di sicurezza",
-        "Come posso aggiungere una nuova rotta API?"
+        "Cosa fa questo progetto?",
+        "Analizza il file kernel",
+        "Controlla le migrazioni database",
+        "Suggerisci un piano per il mobile"
       ]
     },
   ]);
@@ -52,28 +52,32 @@ export function AgentPanel() {
     const projectPath = localStorage.getItem('activeProjectPath');
     const selectedModel = localStorage.getItem('selectedModel') || "qwen2.5-coder:7b";
     
-    console.log(`[FRONTEND] Invio richiesta all'agente: "${text}"`);
-    
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
       content: text,
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setInput("");
     setIsLoading(true);
 
     try {
+      // Prepariamo la history pulita per l'AI
+      const history = newMessages.map(m => ({
+        role: m.role,
+        content: m.content
+      }));
+
       const result = await agenticTaskPlanning({ 
         developmentTask: text,
+        history: history,
         projectName: activeProject || undefined,
         projectPath: projectPath || undefined,
         model: selectedModel
       });
       
-      console.log(`[FRONTEND] Risposta ricevuta dal server:`, result);
-
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
@@ -87,7 +91,7 @@ export function AgentPanel() {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: `Ops! Si è verificato un errore: ${error.message || "Timeout della connessione"}.`,
+        content: `Ops! L'agente ha impiegato troppo tempo o c'è un errore di connessione con Ollama.`,
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -181,7 +185,7 @@ export function AgentPanel() {
                 handleSubmit(input);
               }
             }}
-            placeholder="Chiedi all'AI di analizzare il progetto o suggerire modifiche..."
+            placeholder="Scrivi qui... (l'agente ricorda i messaggi precedenti)"
             className="min-h-[80px] pr-14 py-4 bg-muted/10 border-border/50 focus-visible:ring-primary/20 transition-all resize-none font-body text-sm rounded-xl"
           />
           <div className="absolute right-4 bottom-4">
