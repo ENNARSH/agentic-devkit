@@ -1,6 +1,7 @@
 'use server';
 /**
  * @fileOverview Flow agentico che utilizza TOOLS per permettere all'AI di decidere quali file leggere.
+ * Implementa un ciclo di ragionamento dove l'AI può richiedere l'accesso ai file fisici.
  */
 
 import { ai } from '@/ai/genkit';
@@ -17,35 +18,40 @@ const AgenticTaskPlanningInputSchema = z.object({
 
 /**
  * TOOL: Permette all'AI di leggere il contenuto reale di un file.
+ * Se il file è troppo grande, viene troncato per evitare di superare il contesto del modello.
  */
 const readFileTool = ai.defineTool(
   {
     name: 'readFile',
-    description: 'Legge il contenuto di un file specifico dal file system del progetto.',
+    description: 'Legge il contenuto di un file specifico dal file system del progetto. Usalo se la mappa del progetto non ti dà abbastanza dettagli.',
     inputSchema: z.object({
       filePath: z.string().describe('Il percorso relativo del file da leggere.'),
     }),
     outputSchema: z.string(),
   },
   async (input, { context }) => {
-    // Recuperiamo il projectPath dal contesto della sessione (passato nel flow)
     const projectPath = (context as any)?.projectPath;
     if (!projectPath) {
-      return "Errore: Percorso del progetto non configurato.";
+      return "Errore: Percorso del progetto non configurato nella sessione.";
     }
 
     try {
       const fullPath = path.join(projectPath, input.filePath);
-      console.log(`[TOOL-USE] L'agente sta leggendo il file: ${fullPath}`);
+      console.log(`[TOOL-USE] >>> L'agente ha richiesto la lettura di: ${input.filePath}`);
+      
+      const stats = await fs.stat(fullPath);
       const content = await fs.readFile(fullPath, 'utf-8');
       
-      // Ritorniamo i primi 8000 caratteri per non saturare la memoria dell'LLM
-      return content.length > 8000 
-        ? content.substring(0, 8000) + "\n\n[...File troncato per dimensioni...]" 
-        : content;
+      const MAX_CHARS = 10000;
+      if (content.length > MAX_CHARS) {
+        console.log(`[TOOL-INFO] File troppo grande (${content.length} caratteri). Invio solo i primi ${MAX_CHARS}.`);
+        return `[CONTENUTO TRONCATO - Dimensione totale: ${content.length} caratteri]\n\n${content.substring(0, MAX_CHARS)}\n\n... (il file continua, chiedi specifiche parti se necessario)`;
+      }
+      
+      return content;
     } catch (e: any) {
-      console.error(`[TOOL-ERR] Impossibile leggere ${input.filePath}:`, e.message);
-      return `Errore: Impossibile leggere il file ${input.filePath}. Assicurati che il percorso sia corretto.`;
+      console.error(`[TOOL-ERR] Errore lettura file ${input.filePath}:`, e.message);
+      return `Errore: Impossibile accedere a ${input.filePath}. Verifica che il file esista nel percorso specificato.`;
     }
   }
 );
@@ -60,36 +66,41 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
     projectName = projects.length > 0 ? projects[0].name : 'project-index';
   }
   
-  console.log(`[AGENT] Caricamento mappa mentale del progetto: ${projectName}...`);
+  console.log(`[AGENT] Caricamento indice: ${projectName}...`);
   const projectIndex = await loadProjectIndex(projectName);
   
-  // Creiamo un sommario della mappa per dare all'AI una visione d'insieme
   const projectSummary = projectIndex.length > 0 
     ? projectIndex.map(f => `- ${f.filePath}: ${f.semanticSummary}`).join('\n')
-    : "Nessun indice trovato per questo progetto.";
+    : "Mappa del progetto non disponibile.";
 
   try {
     /**
      * ESECUZIONE AGENTICA:
-     * L'AI ha a disposizione la mappa (projectSummary) e lo strumento (readFileTool).
-     * Se la mappa non basta, userà 'readFile' per analizzare il codice reale.
+     * L'AI ha la mappa come contesto di base e readFileTool come strumento di esplorazione.
+     * Genkit gestisce automaticamente il loop di chiamate ai tool.
      */
     const response = await ai.generate({
       model: 'ollama/qwen2.5-coder:7b',
-      system: `Sei un Architetto Software Senior. Hai accesso a una mappa del progetto e allo strumento 'readFile'.
+      system: `Sei un Ingegnere del Software Esperto. Hai accesso a una mappa semantica del progetto e allo strumento 'readFile'.
       
-      MAPPA DEL PROGETTO (Usa questa per capire quali file esistono):
+      MAPPA DEL PROGETTO (Utilizzala per orientarti e trovare i file giusti):
       ${projectSummary}
       
-      ISTRUZIONI:
-      1. Se la richiesta riguarda il funzionamento di un codice specifico, USA 'readFile' per vedere il file reale prima di rispondere.
-      2. Non inventare il codice. Leggi i file se non sei sicuro.
-      3. Fornisci una spiegazione tecnica chiara.
-      4. Includi SEMPRE un piano d'azione JSON racchiuso tra tag <PLAN> e </PLAN> alla fine della tua risposta.
-      5. Esempio piano: <PLAN>[{"step": "Modifica la funzione X in file.php"}]</PLAN>`,
+      REGOLE DI RAGIONAMENTO:
+      1. Se l'utente chiede spiegazioni su un file, NON basarti solo sulla mappa. USA 'readFile' per vedere il codice reale.
+      2. Se un file è troppo grande, ti verranno inviati i primi 10.000 caratteri.
+      3. Fornisci risposte tecniche, precise e basate sull'evidenza del codice.
+      4. Concludi SEMPRE con un piano d'azione JSON racchiuso tra tag <PLAN> e </PLAN>.
+      
+      Esempio Piano:
+      <PLAN>
+      [
+        {"step": "Modifica la funzione update() in app.php per includere il log"},
+        {"step": "Verifica che il database venga aggiornato correttamente"}
+      ]
+      </PLAN>`,
       prompt: input.developmentTask,
       tools: [readFileTool],
-      // Passiamo il path fisico nei metadati del contesto per il tool
       config: { 
         context: { projectPath: input.projectPath } 
       }
@@ -99,17 +110,18 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[AGENT-RESPONSE] Elaborata in ${duration}s.`);
 
+    // Estrazione del piano d'azione
     let plan = [];
     const planMatch = text.match(/<PLAN>([\s\S]*?)<\/PLAN>/);
     if (planMatch) {
       try {
         plan = JSON.parse(planMatch[1].trim());
       } catch (e) {
-        console.warn("[AGENT] L'AI ha generato un piano JSON non valido.");
+        console.warn("[AGENT] Piano d'azione generato in formato non valido.");
       }
     }
 
-    // Puliamo il testo rimuovendo i tag del piano per visualizzarlo meglio nella chat
+    // Rimuoviamo il tag PLAN dal testo visualizzato per pulizia
     const cleanContent = text.replace(/<PLAN>[\s\S]*?<\/PLAN>/g, '').trim();
     
     return {
@@ -119,8 +131,8 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
   } catch (error: any) {
     console.error(`[AGENT-CRITICAL]`, error.message);
     return { 
-      content: `L'agente ha riscontrato un problema: ${error.message}. Verifica che Ollama sia in esecuzione con il modello corretto.`,
-      plan: [{ step: "Verifica le risorse di sistema o semplifica la richiesta" }] 
+      content: `L'agente ha riscontrato un errore: ${error.message}. Verifica le risorse di sistema o il modello Ollama.`,
+      plan: [{ step: "Verifica lo stato del modello locale o riprova con una richiesta più semplice" }] 
     };
   }
 }
