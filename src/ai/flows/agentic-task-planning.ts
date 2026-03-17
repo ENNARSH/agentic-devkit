@@ -78,19 +78,22 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
   try {
     console.log(`[AGENT-REASONING] L'agente sta elaborando con ${input.history?.length || 0} messaggi di memoria...`);
     
-    let response = await ai.generate({
-      model: selectedModel as any,
-      history: input.history as any,
-      system: `Sei un Ingegnere del Software Senior esperto in analisi del codice.
+    const systemInstruction = `Sei un Ingegnere del Software Senior esperto in analisi del codice.
       
       CONTESTO DEL PROGETTO (Mappa dei file):
       ${projectSummary}
       
       REGOLE DI COMPORTAMENTO:
-      1. Se l'utente chiede di un file specifico, USA il tool 'readFile' per leggerlo prima di rispondere.
-      2. Se non sei sicuro, USA 'readFile' per verificare la realtà dei fatti sul disco.
+      1. Se l'utente chiede di un file specifico o di una logica che non conosci nel dettaglio, USA IMMEDIATAMENTE il tool 'readFile' per leggerlo. NON CHIEDERE IL PERMESSO.
+      2. Non inventare il contenuto dei file. Se non hai letto un file con 'readFile', ammetti di non conoscerlo e usalo.
       3. Rispondi sempre in Italiano.
-      4. Se generi un piano d'azione, racchiudilo tra tag <PLAN>[{"step": "..."}]</PLAN>.`,
+      4. Se generi un piano d'azione, racchiudilo tra tag <PLAN>[{"step": "..."}]</PLAN>.
+      5. Se decidi di usare un tool, scrivi il comando JSON in una riga separata.`;
+
+    let response = await ai.generate({
+      model: selectedModel as any,
+      history: input.history as any,
+      system: systemInstruction,
       prompt: input.developmentTask,
       tools: [readFileTool],
       config: { 
@@ -100,8 +103,10 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
 
     let text = response.text || "";
     
-    // --- MANUALE TOOL DETECTION (Se il modello sputa JSON invece di chiamare il tool) ---
+    // --- MANUALE TOOL DETECTION MIGLIORATA ---
+    // Cerchiamo il JSON del tool call ovunque nel testo
     const toolCallMatch = text.match(/\{"name":\s*"readFile",\s*"arguments":\s*\{"filePath":\s*"([^"]+)"\}\}/);
+    
     if (toolCallMatch) {
       const filePath = toolCallMatch[1];
       console.log(`[AGENT-MANUAL-LOOP] Rilevata tool call nel testo per: ${filePath}. Esecuzione manuale...`);
@@ -110,11 +115,16 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
       
       console.log(`[AGENT-MANUAL-LOOP] Contenuto file ottenuto. Chiedo all'AI di analizzarlo...`);
       
-      // Chiamata di follow-up con il contenuto del file
+      // Chiamata di follow-up con il contenuto del file per completare la risposta
       const followUpResponse = await ai.generate({
         model: selectedModel as any,
-        history: [...(input.history || []), { role: 'user', content: input.developmentTask }, { role: 'assistant', content: text }] as any,
-        prompt: `Ecco il contenuto del file '${filePath}':\n\n${fileContent}\n\nBasandoti su questo codice, rispondi alla mia domanda originale: "${input.developmentTask}"`,
+        history: [
+          ...(input.history || []), 
+          { role: 'user', content: input.developmentTask }, 
+          { role: 'assistant', content: text }
+        ] as any,
+        system: systemInstruction,
+        prompt: `Contenuto del file '${filePath}':\n\n${fileContent}\n\nAnalizza questo codice e rispondi alla richiesta dell'utente.`,
       });
       
       text = followUpResponse.text || "";
