@@ -48,9 +48,11 @@ export function AgentPanel() {
   const handleSubmit = async (text: string) => {
     if (!text.trim() || isLoading) return;
 
-    const activeProject = localStorage.getItem('activeProjectIndex');
+    const activeProject = localStorage.getItem('activeProjectName');
     const projectPath = localStorage.getItem('activeProjectPath');
     const selectedModel = localStorage.getItem('selectedModel') || "qwen2.5-coder:7b";
+    
+    console.log(`[FRONTEND] Invio richiesta all'agente: "${text}"`);
     
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -70,6 +72,8 @@ export function AgentPanel() {
         model: selectedModel
       });
       
+      console.log(`[FRONTEND] Risposta ricevuta dal server:`, result);
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
@@ -78,11 +82,12 @@ export function AgentPanel() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
+    } catch (error: any) {
+      console.error(`[FRONTEND-ERROR]`, error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "Ops! Errore di comunicazione. Verifica che Ollama sia in esecuzione.",
+        content: `Ops! Si è verificato un errore: ${error.message || "Timeout della connessione"}.`,
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {

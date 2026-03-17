@@ -1,6 +1,6 @@
 'use server';
 /**
- * @fileOverview Flow agentico potenziato con log di debug per il monitoraggio dei Tools.
+ * @fileOverview Flow agentico potenziato con log di debug per il monitoraggio dei Tools e dell'output.
  */
 
 import { ai } from '@/ai/genkit';
@@ -37,7 +37,6 @@ const readFileTool = ai.defineTool(
       console.log(`[AGENT-ACTION] Chiamata tool 'readFile' per: ${input.filePath}`);
       const content = await fs.readFile(fullPath, 'utf-8');
       
-      // Troncamento intelligente per non saturare il contesto
       if (content.length > 15000) {
         console.log(`[AGENT-ACTION] File troppo grande (${content.length} chars). Invio primi 15k.`);
         return content.substring(0, 15000) + "\n\n...[CONTENUTO TRONCATO PER DIMENSIONI ECCESSIVE]...";
@@ -54,23 +53,22 @@ const readFileTool = ai.defineTool(
 
 export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlanningInputSchema>) {
   const startTime = Date.now();
-  const selectedModel = input.model ? `ollama/${input.model}` : 'ollama/qwen2.5-coder:7b';
+  // Assicuriamoci che il nome del modello sia pulito per il match con la config
+  const rawModelName = input.model || 'qwen2.5-coder:7b';
+  const selectedModel = `ollama/${rawModelName}`;
   
   console.log(`\n[AGENT-START] ---------------------------------------------------`);
   console.log(`[AGENT-START] Modello: ${selectedModel}`);
   console.log(`[AGENT-START] Task: "${input.developmentTask}"`);
-  console.log(`[AGENT-START] Progetto: ${input.projectName || 'Default'}`);
   
   let projectName = input.projectName;
   if (!projectName) {
     const projects = await listIndexedProjects();
     projectName = projects.length > 0 ? projects[0].name : 'project-index';
-    console.log(`[AGENT-INFO] Nessun progetto selezionato, uso: ${projectName}`);
   }
   
   const projectIndex = await loadProjectIndex(projectName);
   const projectSummary = projectIndex.map(f => `- ${f.filePath}: ${f.semanticSummary}`).join('\n');
-  console.log(`[AGENT-INFO] Indice caricato: ${projectIndex.length} file conosciuti.`);
 
   try {
     console.log(`[AGENT-REASONING] L'agente sta iniziando a pensare...`);
@@ -82,8 +80,8 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
       ${projectSummary}
       
       REGOLE DI COMPORTAMENTO:
-      1. Se l'utente chiede di un file specifico, USA il tool 'readFile' per leggerlo prima di rispondere. Non inventare il codice.
-      2. Se devi spiegare una logica complessa, chiedi all'agente di leggere i file coinvolti.
+      1. Se l'utente chiede di un file specifico, USA il tool 'readFile' per leggerlo prima di rispondere.
+      2. Se devi spiegare una logica complessa, usa i tools disponibili.
       3. Rispondi sempre in Italiano.
       4. Se generi un piano d'azione, racchiudilo tra tag <PLAN>[{"step": "..."}]</PLAN>.`,
       prompt: input.developmentTask,
@@ -93,9 +91,17 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
       }
     });
 
-    const text = response.text;
+    const text = response.text || "";
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[AGENT-END] Risposta generata in ${duration}s.`);
+    
+    console.log(`[AGENT-RESPONSE] Risposta ricevuta dal modello (${text.length} caratteri).`);
+    if (text) {
+      console.log(`[AGENT-RESPONSE-PREVIEW] ${text.substring(0, 200).replace(/\n/g, ' ')}...`);
+    } else {
+      console.warn(`[AGENT-RESPONSE-EMPTY] Il modello non ha restituito testo.`);
+    }
+    
+    console.log(`[AGENT-END] Operazione completata in ${duration}s.`);
 
     let plan = [];
     const planMatch = text.match(/<PLAN>([\s\S]*?)<\/PLAN>/);
@@ -104,15 +110,14 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
     }
 
     return {
-      content: text.replace(/<PLAN>[\s\S]*?<\/PLAN>/g, '').trim(),
+      content: text.replace(/<PLAN>[\s\S]*?<\/PLAN>/g, '').trim() || "Il modello ha completato l'analisi ma non ha prodotto un testo di risposta. Prova a essere più specifico.",
       plan: plan.length > 0 ? plan : undefined
     };
   } catch (error: any) {
-    console.error(`[AGENT-ERROR] Errore durante la generazione:`, error.message);
+    console.error(`[AGENT-ERROR] Errore critico:`, error.message);
     return { 
-      content: `Mi dispiace, si è verificato un errore: ${error.message}. 
-      Verifica che Ollama sia attivo e che il modello '${selectedModel}' sia stato scaricato correttamente.`,
-      plan: [{ step: "Verifica stato Ollama" }] 
+      content: `Errore durante la generazione: ${error.message}. Verifica che Ollama sia attivo.`,
+      plan: [{ step: "Riavvia Ollama" }] 
     };
   }
 }
