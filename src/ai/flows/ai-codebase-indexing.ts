@@ -37,7 +37,7 @@ export async function saveProjectIndex(indexData: any[], projectName: string = '
   await ensureDataDir();
   const filePath = path.join(INDEX_DATA_DIR, `${projectName}.json`);
   await fs.writeFile(filePath, JSON.stringify(indexData, null, 2), 'utf-8');
-  console.log(`[INDEXER] Salvataggio completato: ${indexData.length} file scritti in ${projectName}.json`);
+  console.log(`[INDEXER] Salvataggio incrementale: ${indexData.length} file scritti in ${projectName}.json`);
 }
 
 export async function loadProjectIndex(projectName: string = 'project-index'): Promise<any[]> {
@@ -52,9 +52,16 @@ export async function loadProjectIndex(projectName: string = 'project-index'): P
 
 export async function getFilesToProcess(projectPath: string): Promise<string[]> {
   const files: string[] = [];
-  const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build', '.firebase', 'out', 'vendor', 'storage', 'public/vendor'];
-  const ignoreFiles = ['package-lock.json', 'yarn.lock', 'composer.lock', 'pnpm-lock.yaml', '.env', 'favicon.ico', '.DS_Store'];
-  const MAX_FILE_SIZE = 500 * 1024; 
+  let totalFilesSeen = 0;
+  const ignoreFolders = [
+    'node_modules', '.git', '.next', 'dist', 'build', '.firebase', 'out', 
+    'vendor', 'storage', 'public/vendor', 'tmp', 'logs', 'obj', 'bin'
+  ];
+  const ignoreFiles = [
+    'package-lock.json', 'yarn.lock', 'composer.lock', 'pnpm-lock.yaml', 
+    '.env', 'favicon.ico', '.DS_Store', 'thumbs.db', '.gitignore'
+  ];
+  const MAX_FILE_SIZE = 500 * 1024; // 500KB
   
   async function walk(currentDirPath: string) {
     let entries;
@@ -65,6 +72,7 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
     }
 
     for (const entry of entries) {
+      totalFilesSeen++;
       const fullPath = path.join(currentDirPath, entry.name);
       const relativePath = path.relative(projectPath, fullPath);
 
@@ -74,9 +82,17 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
         }
       } else if (entry.isFile()) {
         const fileExtension = path.extname(entry.name).toLowerCase();
-        const validExts = ['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css', '.php', '.py', '.html', '.sql', '.yaml', '.yml', '.blade.php'];
+        // Supporto per una vasta gamma di file di testo sorgente
+        const validExts = [
+          '.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css', '.php', 
+          '.py', '.html', '.sql', '.yaml', '.yml', '.blade.php', 
+          '.xml', '.toml', '.dockerfile', '.sh', '.bat', '.env.example'
+        ];
         
-        if ((validExts.includes(fileExtension) || entry.name.endsWith('.blade.php')) && !ignoreFiles.includes(entry.name)) {
+        const isBlade = entry.name.endsWith('.blade.php');
+        const isDockerfile = entry.name.toLowerCase() === 'dockerfile';
+        
+        if ((validExts.includes(fileExtension) || isBlade || isDockerfile) && !ignoreFiles.includes(entry.name)) {
           try {
             const stats = await fs.stat(fullPath);
             if (stats.size <= MAX_FILE_SIZE) {
@@ -88,7 +104,9 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
     }
   }
   
+  console.log(`[INDEXER] Scansione avviata in: ${projectPath}...`);
   await walk(projectPath);
+  console.log(`[INDEXER] Scansione completata. File totali trovati: ${totalFilesSeen}. File sorgente validi selezionati per l'analisi: ${files.length}.`);
   return files;
 }
 
