@@ -3,10 +3,10 @@ import { ollama } from 'genkitx-ollama';
 
 /**
  * Configurazione centrale Genkit.
- * Qui puoi cambiare il modello "sotto" l'applicazione senza modificare i flow.
- * Modelli consigliati per Ollama:
- * - 'ollama/qwen2.5-coder:7b' (Ottimo per il codice)
- * - 'ollama/llama3.2:3b' (Leggerissimo, per PC con poca RAM)
+ * Modelli consigliati per Ollama (da scaricare con 'ollama pull <nome>'):
+ * - 'ollama/qwen2.5-coder:7b' -> BILANCIATO: Il migliore per programmare su PC con 16GB+ RAM.
+ * - 'ollama/llama3.2:3b'     -> LEGGERO: Molto veloce, ideale se il PC rallenta.
+ * - 'ollama/llama3.1:8b'     -> POTENTE: Ottimo ragionamento, ma richiede più RAM.
  */
 export const ai = genkit({
   plugins: [
@@ -14,5 +14,6 @@ export const ai = genkit({
       serverAddress: 'http://localhost:11434',
     }),
   ],
+  // Cambia questa riga per testare modelli diversi senza toccare i flow
   model: 'ollama/qwen2.5-coder:7b',
 });

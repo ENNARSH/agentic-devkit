@@ -38,10 +38,14 @@ const readFileTool = ai.defineTool(
       const fullPath = path.join(projectPath, input.filePath);
       console.log(`[TOOL-USE] L'agente sta leggendo il file: ${fullPath}`);
       const content = await fs.readFile(fullPath, 'utf-8');
-      return content.substring(0, 5000); // Limite per evitare overflow di memoria
+      
+      // Ritorniamo i primi 8000 caratteri per non saturare la memoria dell'LLM
+      return content.length > 8000 
+        ? content.substring(0, 8000) + "\n\n[...File troncato per dimensioni...]" 
+        : content;
     } catch (e: any) {
       console.error(`[TOOL-ERR] Impossibile leggere ${input.filePath}:`, e.message);
-      return `Errore: Impossibile leggere il file ${input.filePath}.`;
+      return `Errore: Impossibile leggere il file ${input.filePath}. Assicurati che il percorso sia corretto.`;
     }
   }
 );
@@ -56,28 +60,33 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
     projectName = projects.length > 0 ? projects[0].name : 'project-index';
   }
   
-  console.log(`[AGENT] Caricamento mappa mentale: ${projectName}...`);
+  console.log(`[AGENT] Caricamento mappa mentale del progetto: ${projectName}...`);
   const projectIndex = await loadProjectIndex(projectName);
-  const projectContext = projectIndex.slice(0, 100).map(f => `- ${f.filePath}: ${f.semanticSummary}`).join('\n');
+  
+  // Creiamo un sommario della mappa per dare all'AI una visione d'insieme
+  const projectSummary = projectIndex.length > 0 
+    ? projectIndex.map(f => `- ${f.filePath}: ${f.semanticSummary}`).join('\n')
+    : "Nessun indice trovato per questo progetto.";
 
   try {
     /**
      * ESECUZIONE AGENTICA:
-     * L'AI ha a disposizione la mappa (projectContext) e lo strumento (readFileTool).
-     * Se non capisce qualcosa dalla mappa, userà lo strumento per leggere il codice reale.
+     * L'AI ha a disposizione la mappa (projectSummary) e lo strumento (readFileTool).
+     * Se la mappa non basta, userà 'readFile' per analizzare il codice reale.
      */
     const response = await ai.generate({
       model: 'ollama/qwen2.5-coder:7b',
       system: `Sei un Architetto Software Senior. Hai accesso a una mappa del progetto e allo strumento 'readFile'.
       
-      MAPPA DEL PROGETTO (Sommario):
-      ${projectContext}
+      MAPPA DEL PROGETTO (Usa questa per capire quali file esistono):
+      ${projectSummary}
       
       ISTRUZIONI:
-      1. Se la richiesta riguarda file specifici, usa 'readFile' per analizzare il codice reale prima di rispondere.
-      2. Spiega tecnicamente cosa fa il codice o come risolvere il problema.
-      3. Includi SEMPRE un piano d'azione JSON racchiuso tra tag <PLAN> e </PLAN>.
-      4. Esempio piano: <PLAN>[{"step": "Modifica db.php"}]</PLAN>`,
+      1. Se la richiesta riguarda il funzionamento di un codice specifico, USA 'readFile' per vedere il file reale prima di rispondere.
+      2. Non inventare il codice. Leggi i file se non sei sicuro.
+      3. Fornisci una spiegazione tecnica chiara.
+      4. Includi SEMPRE un piano d'azione JSON racchiuso tra tag <PLAN> e </PLAN> alla fine della tua risposta.
+      5. Esempio piano: <PLAN>[{"step": "Modifica la funzione X in file.php"}]</PLAN>`,
       prompt: input.developmentTask,
       tools: [readFileTool],
       // Passiamo il path fisico nei metadati del contesto per il tool
@@ -88,7 +97,7 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
 
     const text = response.text;
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[AGENT-RESPONSE] Ricevuta in ${duration}s.`);
+    console.log(`[AGENT-RESPONSE] Elaborata in ${duration}s.`);
 
     let plan = [];
     const planMatch = text.match(/<PLAN>([\s\S]*?)<\/PLAN>/);
@@ -96,11 +105,13 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
       try {
         plan = JSON.parse(planMatch[1].trim());
       } catch (e) {
-        console.warn("[AGENT] Piano JSON non valido generato dal modello.");
+        console.warn("[AGENT] L'AI ha generato un piano JSON non valido.");
       }
     }
 
+    // Puliamo il testo rimuovendo i tag del piano per visualizzarlo meglio nella chat
     const cleanContent = text.replace(/<PLAN>[\s\S]*?<\/PLAN>/g, '').trim();
+    
     return {
       content: cleanContent,
       plan: plan.length > 0 ? plan : undefined
@@ -108,8 +119,8 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
   } catch (error: any) {
     console.error(`[AGENT-CRITICAL]`, error.message);
     return { 
-      content: "L'agente ha riscontrato un problema durante il ragionamento. Verifica la memoria disponibile.",
-      plan: [{ step: "Riduci la complessità della domanda" }] 
+      content: `L'agente ha riscontrato un problema: ${error.message}. Verifica che Ollama sia in esecuzione con il modello corretto.`,
+      plan: [{ step: "Verifica le risorse di sistema o semplifica la richiesta" }] 
     };
   }
 }
