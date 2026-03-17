@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -20,7 +21,6 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,8 +56,10 @@ export function ProjectSidebar() {
       title: "Progetto Caricato",
       description: `Il contesto per ${projectName} è ora attivo.`,
     });
-    // Store active project in a way the agent can see it (simple localStorage for client-side persistence)
     localStorage.setItem('activeProjectIndex', projectName);
+    // Nota: qui potremmo avere bisogno di salvare anche il path fisico se noto
+    // Per ora usiamo quello nell'input se corrisponde al nome
+    localStorage.setItem('activeProjectPath', projectPath);
   };
 
   const handleIndex = async () => {
@@ -76,13 +78,8 @@ export function ProjectSidebar() {
         return;
       }
 
-      toast({
-        title: "Inizio Indicizzazione",
-        description: `Trovati ${total} file. Analisi semantica in corso...`,
-      });
-
-      const indexedResults = [];
       const projectName = projectPath.split(/[/\\]/).pop() || 'project-index';
+      const indexedResults = [];
       
       for (let i = 0; i < total; i++) {
         const relativePath = fileList[i];
@@ -101,6 +98,7 @@ export function ProjectSidebar() {
       refreshProjects();
       setActiveProject(projectName);
       localStorage.setItem('activeProjectIndex', projectName);
+      localStorage.setItem('activeProjectPath', projectPath);
     } catch (error) {
       toast({ variant: "destructive", title: "Errore Indicizzazione" });
     } finally {

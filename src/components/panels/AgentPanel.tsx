@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -27,12 +28,12 @@ export function AgentPanel() {
     {
       id: "welcome",
       role: "assistant",
-      content: "Pronto ad aiutarti! Seleziona un progetto dalla sidebar o chiedimi di analizzare qualcosa del tuo codice.",
+      content: "Pronto ad aiutarti! Seleziona un progetto dalla sidebar e chiedimi di analizzare file specifici o di pianificare modifiche.",
       suggestions: [
-        "Quali sono i file principali del progetto?",
-        "Dove viene gestita la connessione al database?",
-        "Crea un piano per aggiungere una nuova rotta",
-        "Trova i file che gestiscono i modali"
+        "Analizza il file index.php e dimmi cosa fa",
+        "Come posso aggiungere una nuova funzionalità?",
+        "Quali sono le dipendenze principali?",
+        "Trova dove vengono gestiti gli errori"
       ]
     },
   ]);
@@ -52,6 +53,7 @@ export function AgentPanel() {
     if (!text.trim() || isLoading) return;
 
     const activeProject = localStorage.getItem('activeProjectIndex');
+    const projectPath = localStorage.getItem('activeProjectPath'); // Recuperiamo il path fisico
     
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -66,7 +68,8 @@ export function AgentPanel() {
     try {
       const result = await agenticTaskPlanning({ 
         developmentTask: text,
-        projectName: activeProject || undefined 
+        projectName: activeProject || undefined,
+        projectPath: projectPath || undefined
       });
       
       const assistantMessage: Message = {
@@ -81,7 +84,7 @@ export function AgentPanel() {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "Ops! Si è verificato un errore di comunicazione con l'AI. Verifica che Ollama sia in esecuzione.",
+        content: "Ops! Errore di comunicazione con Ollama. Verifica che il modello sia caricato.",
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -142,18 +145,6 @@ export function AgentPanel() {
                           </div>
                           <div className="flex-1">
                             <p className="text-xs font-medium mb-1 leading-snug">{step.step}</p>
-                            {step.tool && (
-                              <div className="flex items-center gap-2 mt-3">
-                                <Badge variant="secondary" className="text-[10px] px-2 py-0.5 bg-muted/50 text-muted-foreground flex items-center gap-1.5 font-code">
-                                  <Terminal size={10} /> {step.tool}
-                                </Badge>
-                                {step.toolInput && (
-                                  <span className="text-[10px] text-muted-foreground font-code truncate opacity-60">
-                                    {typeof step.toolInput === 'string' ? step.toolInput : JSON.stringify(step.toolInput)}
-                                  </span>
-                                )}
-                              </div>
-                            )}
                           </div>
                         </div>
                       ))}
@@ -189,7 +180,7 @@ export function AgentPanel() {
                 handleSubmit(input);
               }
             }}
-            placeholder="Chiedi all'agente di analizzare o pianificare qualcosa..."
+            placeholder="Analizza un file (es: 'leggi app.js') o chiedi un piano..."
             className="min-h-[80px] pr-14 py-4 bg-muted/10 border-border/50 focus-visible:ring-primary/20 transition-all resize-none font-body text-sm rounded-xl"
           />
           <div className="absolute right-4 bottom-4 flex gap-2">
@@ -203,17 +194,6 @@ export function AgentPanel() {
             </Button>
           </div>
         </form>
-        <div className="mt-3 flex items-center justify-center gap-6">
-          <span className="text-[10px] text-muted-foreground flex items-center gap-1.5">
-            <Search size={10} className="text-primary" /> Ricerca Semantica
-          </span>
-          <span className="text-[10px] text-muted-foreground flex items-center gap-1.5">
-            <ListChecks size={10} className="text-primary" /> Agentic Planning
-          </span>
-          <span className="text-[10px] text-muted-foreground flex items-center gap-1.5">
-            <Code2 size={10} className="text-primary" /> Analisi Codebase
-          </span>
-        </div>
       </div>
     </div>
   );
