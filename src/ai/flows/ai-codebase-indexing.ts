@@ -37,6 +37,7 @@ export async function saveProjectIndex(indexData: any[], projectName: string = '
   await ensureDataDir();
   const filePath = path.join(INDEX_DATA_DIR, `${projectName}.json`);
   await fs.writeFile(filePath, JSON.stringify(indexData, null, 2), 'utf-8');
+  console.log(`[INDEXER] Salvataggio completato: ${indexData.length} file scritti in ${projectName}.json`);
 }
 
 export async function loadProjectIndex(projectName: string = 'project-index'): Promise<any[]> {

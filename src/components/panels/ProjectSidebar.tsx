@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -72,6 +71,7 @@ export function ProjectSidebar() {
     }
     
     localStorage.setItem('activeProjectName', projectName);
+    localStorage.setItem('activeProjectIndex', projectName);
     
     toast({
       title: "Progetto Selezionato",
@@ -114,14 +114,21 @@ export function ProjectSidebar() {
           setProgress(Math.round(((i + 1) / total) * 100));
           setFiles([...indexedResults]);
         }
+
+        // SALVATAGGIO INCREMENTALE OGNI 10 FILE
+        if ((i + 1) % 10 === 0) {
+          await saveProjectIndex(indexedResults, projectName);
+        }
       }
 
+      // Salvataggio finale
       await saveProjectIndex(indexedResults, projectName);
       
       // Memorizza il path per il futuro
       localStorage.setItem(`path_${projectName}`, targetPath);
       localStorage.setItem('activeProjectPath', targetPath);
       localStorage.setItem('activeProjectName', projectName);
+      localStorage.setItem('activeProjectIndex', projectName);
 
       toast({ title: "Completato", description: `Indice per '${projectName}' aggiornato con successo.` });
       refreshProjectsList();
