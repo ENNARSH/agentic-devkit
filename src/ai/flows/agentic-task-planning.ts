@@ -78,7 +78,7 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
   try {
     console.log(`[AGENT-REASONING] L'agente sta elaborando con ${input.history?.length || 0} messaggi di memoria...`);
     
-    const response = await ai.generate({
+    let response = await ai.generate({
       model: selectedModel as any,
       history: input.history as any,
       system: `Sei un Ingegnere del Software Senior esperto in analisi del codice.
@@ -98,12 +98,26 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
       }
     });
 
-    const text = response.text || "";
+    let text = response.text || "";
     
-    // Debug Tool Calls
-    const toolCalls = (response as any).toolCalls || [];
-    if (toolCalls.length > 0) {
-      console.log(`[AGENT-INFO] Il modello ha invocato ${toolCalls.length} strumenti.`);
+    // --- MANUALE TOOL DETECTION (Se il modello sputa JSON invece di chiamare il tool) ---
+    const toolCallMatch = text.match(/\{"name":\s*"readFile",\s*"arguments":\s*\{"filePath":\s*"([^"]+)"\}\}/);
+    if (toolCallMatch) {
+      const filePath = toolCallMatch[1];
+      console.log(`[AGENT-MANUAL-LOOP] Rilevata tool call nel testo per: ${filePath}. Esecuzione manuale...`);
+      
+      const fileContent = await readFileTool({ filePath }, { context: { projectPath: input.projectPath } } as any);
+      
+      console.log(`[AGENT-MANUAL-LOOP] Contenuto file ottenuto. Chiedo all'AI di analizzarlo...`);
+      
+      // Chiamata di follow-up con il contenuto del file
+      const followUpResponse = await ai.generate({
+        model: selectedModel as any,
+        history: [...(input.history || []), { role: 'user', content: input.developmentTask }, { role: 'assistant', content: text }] as any,
+        prompt: `Ecco il contenuto del file '${filePath}':\n\n${fileContent}\n\nBasandoti su questo codice, rispondi alla mia domanda originale: "${input.developmentTask}"`,
+      });
+      
+      text = followUpResponse.text || "";
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
