@@ -1,12 +1,10 @@
-
 "use client";
 
 import * as React from "react";
-import { Send, Bot, User, Sparkles, Terminal, Search, Code2, ListChecks } from "lucide-react";
+import { Send, Bot, User, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import { agenticTaskPlanning } from "@/ai/flows/agentic-task-planning";
 import { cn } from "@/lib/utils";
 
@@ -16,8 +14,6 @@ type Message = {
   content: string;
   plan?: {
     step: string;
-    tool?: string;
-    toolInput?: any;
   }[];
   suggestions?: string[];
 };
@@ -28,12 +24,12 @@ export function AgentPanel() {
     {
       id: "welcome",
       role: "assistant",
-      content: "Pronto ad aiutarti! Seleziona un progetto dalla sidebar e chiedimi di analizzare file specifici o di pianificare modifiche.",
+      content: "Pronto ad aiutarti! Seleziona un progetto e un modello dalla sidebar. Posso analizzare il codice e suggerire piani d'azione.",
       suggestions: [
-        "Analizza il file index.php e dimmi cosa fa",
-        "Come posso aggiungere una nuova funzionalità?",
-        "Quali sono le dipendenze principali?",
-        "Trova dove vengono gestiti gli errori"
+        "Analizza il layout per smartphone",
+        "Spiegami come funziona la gestione sessioni",
+        "Trova potenziali bug di sicurezza",
+        "Come posso aggiungere una nuova rotta API?"
       ]
     },
   ]);
@@ -53,7 +49,8 @@ export function AgentPanel() {
     if (!text.trim() || isLoading) return;
 
     const activeProject = localStorage.getItem('activeProjectIndex');
-    const projectPath = localStorage.getItem('activeProjectPath'); // Recuperiamo il path fisico
+    const projectPath = localStorage.getItem('activeProjectPath');
+    const selectedModel = localStorage.getItem('selectedModel') || "qwen2.5-coder:7b";
     
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -69,7 +66,8 @@ export function AgentPanel() {
       const result = await agenticTaskPlanning({ 
         developmentTask: text,
         projectName: activeProject || undefined,
-        projectPath: projectPath || undefined
+        projectPath: projectPath || undefined,
+        model: selectedModel
       });
       
       const assistantMessage: Message = {
@@ -84,7 +82,7 @@ export function AgentPanel() {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "Ops! Errore di comunicazione con Ollama. Verifica che il modello sia caricato.",
+        content: "Ops! Errore di comunicazione. Verifica che Ollama sia in esecuzione.",
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -109,7 +107,7 @@ export function AgentPanel() {
               >
                 <div className={cn(
                   "h-8 w-8 rounded-full flex items-center justify-center shrink-0",
-                  message.role === "assistant" ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" : "bg-accent text-accent-foreground"
+                  message.role === "assistant" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
                 )}>
                   {message.role === "assistant" ? <Bot size={18} /> : <User size={18} />}
                 </div>
@@ -125,7 +123,7 @@ export function AgentPanel() {
                           key={i} 
                           variant="outline" 
                           size="sm" 
-                          className="text-[11px] h-7 bg-background/50 hover:bg-primary/10 hover:text-primary hover:border-primary/50"
+                          className="text-[11px] h-7 bg-background/50 hover:bg-primary/10"
                           onClick={() => handleSubmit(suggestion)}
                         >
                           <Sparkles size={10} className="mr-1.5" />
@@ -137,15 +135,13 @@ export function AgentPanel() {
 
                   {message.plan && (
                     <div className="space-y-3 mt-4">
-                      <h4 className="text-[10px] font-bold uppercase tracking-widest text-primary/70 mb-2">Piano d'azione suggerito:</h4>
+                      <h4 className="text-[10px] font-bold uppercase tracking-widest text-primary/70">Piano suggerito:</h4>
                       {message.plan.map((step, idx) => (
-                        <div key={idx} className="flex gap-3 items-start p-4 rounded-lg bg-background/50 border border-border group hover:border-primary/30 transition-all hover:shadow-md">
-                          <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                        <div key={idx} className="flex gap-3 items-start p-3 rounded-lg bg-background/50 border border-border group hover:border-primary/30 transition-all">
+                          <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                             {idx + 1}
                           </div>
-                          <div className="flex-1">
-                            <p className="text-xs font-medium mb-1 leading-snug">{step.step}</p>
-                          </div>
+                          <p className="text-xs leading-snug">{step.step}</p>
                         </div>
                       ))}
                     </div>
@@ -169,7 +165,7 @@ export function AgentPanel() {
       <div className="p-6 border-t bg-background/80 backdrop-blur-md">
         <form 
           onSubmit={(e) => { e.preventDefault(); handleSubmit(input); }} 
-          className="max-w-4xl mx-auto relative group"
+          className="max-w-4xl mx-auto relative"
         >
           <Textarea
             value={input}
@@ -180,15 +176,15 @@ export function AgentPanel() {
                 handleSubmit(input);
               }
             }}
-            placeholder="Analizza un file (es: 'leggi app.js') o chiedi un piano..."
+            placeholder="Chiedi all'AI di analizzare il progetto o suggerire modifiche..."
             className="min-h-[80px] pr-14 py-4 bg-muted/10 border-border/50 focus-visible:ring-primary/20 transition-all resize-none font-body text-sm rounded-xl"
           />
-          <div className="absolute right-4 bottom-4 flex gap-2">
+          <div className="absolute right-4 bottom-4">
             <Button 
               type="submit" 
               size="icon" 
               disabled={isLoading || !input.trim()}
-              className="h-9 w-9 rounded-xl bg-primary hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+              className="h-9 w-9 rounded-xl bg-primary hover:bg-primary/90 transition-all"
             >
               <Send size={18} />
             </Button>

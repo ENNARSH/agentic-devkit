@@ -14,11 +14,11 @@ const AgenticTaskPlanningInputSchema = z.object({
   developmentTask: z.string(),
   projectName: z.string().optional(),
   projectPath: z.string().optional(),
+  model: z.string().optional(), // Permette di specificare il modello da usare
 });
 
 /**
  * TOOL: Permette all'AI di leggere il contenuto reale di un file.
- * Se il file è troppo grande, viene troncato per evitare di superare il contesto del modello.
  */
 const readFileTool = ai.defineTool(
   {
@@ -39,24 +39,26 @@ const readFileTool = ai.defineTool(
       const fullPath = path.join(projectPath, input.filePath);
       console.log(`[TOOL-USE] >>> L'agente sta analizzando: ${input.filePath}`);
       
-      const stats = await fs.stat(fullPath);
       const content = await fs.readFile(fullPath, 'utf-8');
       
       const MAX_CHARS = 12000;
       if (content.length > MAX_CHARS) {
-        return `[CONTENUTO TRONCATO - Dimensione: ${content.length}]\n\n${content.substring(0, MAX_CHARS)}\n\n... (file troppo grande, chiedimi parti specifiche se necessario)`;
+        return `[CONTENUTO TRONCATO - Dimensione: ${content.length}]\n\n${content.substring(0, MAX_CHARS)}\n\n... (file troppo grande)`;
       }
       
       return content;
     } catch (e: any) {
-      return `Errore: Impossibile leggere ${input.filePath}. Assicurati che il percorso sia corretto.`;
+      return `Errore: Impossibile leggere ${input.filePath}.`;
     }
   }
 );
 
 export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlanningInputSchema>) {
   const startTime = Date.now();
-  console.log(`\n[AGENT-REASONING] >>> Richiesta: "${input.developmentTask}"`);
+  // Se il modello non è specificato, usiamo quello di default di genkit.ts
+  const selectedModel = input.model ? `ollama/${input.model}` : undefined;
+  
+  console.log(`\n[AGENT-REASONING] >>> Modello: ${input.model || 'Default'} | Task: "${input.developmentTask}"`);
   
   let projectName = input.projectName;
   if (!projectName) {
@@ -70,21 +72,17 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
     : "Indice non disponibile.";
 
   try {
-    /**
-     * ESECUZIONE AGENTICA:
-     * Usiamo il modello configurato in genkit.ts (si raccomanda qwen2.5-coder:7b per i tools).
-     */
     const response = await ai.generate({
-      // Lasciamo che Genkit usi il modello di default definito in genkit.ts
-      system: `Sei un esperto Sviluppatore Full-Stack specializzato in UI Responsive e Architetture Software.
+      model: selectedModel as any, // Forza l'uso del modello selezionato
+      system: `Sei un esperto Sviluppatore Full-Stack.
       
       MAPPA DEL PROGETTO:
       ${projectSummary}
       
       IL TUO COMPITO:
-      1. Se l'utente ha problemi di visualizzazione (smartphone/mobile), identifica i file CSS, Tailwind o i template HTML/Blade rilevanti.
-      2. USA SEMPRE 'readFile' per vedere il codice reale prima di suggerire modifiche.
-      3. Proponi soluzioni concrete basate sulle classi CSS o Tailwind che trovi.
+      1. Identifica i file rilevanti per la richiesta.
+      2. USA 'readFile' per vedere il codice reale prima di suggerire modifiche.
+      3. Proponi soluzioni concrete.
       
       REGOLE:
       - Sii tecnico e preciso.
@@ -116,8 +114,8 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
   } catch (error: any) {
     console.error(`[AGENT-ERR]`, error.message);
     return { 
-      content: `L'agente ha avuto un problema di memoria o di compatibilità. Assicurati di aver scaricato il modello consigliato con 'ollama pull qwen2.5-coder:7b'.`,
-      plan: [{ step: "Scarica qwen2.5-coder:7b per abilitare i Tools" }] 
+      content: `Errore: ${error.message}. Assicurati che il modello '${input.model}' sia attivo su Ollama.`,
+      plan: [{ step: "Verifica configurazione Ollama" }] 
     };
   }
 }
