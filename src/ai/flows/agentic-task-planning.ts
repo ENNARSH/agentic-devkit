@@ -1,6 +1,6 @@
 'use server';
 /**
- * @fileOverview Flow per la generazione di piani d'azione basati sull'indice attivo e lettura reale dei file.
+ * @fileOverview Flow agentico che utilizza TOOLS per permettere all'AI di decidere quali file leggere.
  */
 
 import { ai } from '@/ai/genkit';
@@ -15,44 +15,40 @@ const AgenticTaskPlanningInputSchema = z.object({
   projectPath: z.string().optional(),
 });
 
-const agenticTaskPlanningPrompt = ai.definePrompt({
-  name: 'agenticTaskPlanningPrompt',
-  input: { 
-    schema: z.object({
-      developmentTask: z.string(),
-      projectContext: z.string(),
-      fileContent: z.string().optional(),
-    }) 
+/**
+ * TOOL: Permette all'AI di leggere il contenuto reale di un file.
+ */
+const readFileTool = ai.defineTool(
+  {
+    name: 'readFile',
+    description: 'Legge il contenuto di un file specifico dal file system del progetto.',
+    inputSchema: z.object({
+      filePath: z.string().describe('Il percorso relativo del file da leggere.'),
+    }),
+    outputSchema: z.string(),
   },
-  output: { format: 'text' },
-  prompt: `Sei un Architetto Software Senior. Il tuo compito è analizzare la richiesta dell'utente e fornire una spiegazione tecnica seguita da un piano d'azione.
+  async (input, { context }) => {
+    // Recuperiamo il projectPath dal contesto della sessione (passato nel flow)
+    const projectPath = (context as any)?.projectPath;
+    if (!projectPath) {
+      return "Errore: Percorso del progetto non configurato.";
+    }
 
-Hai accesso alla mappa del progetto (RAG) e, se pertinente, al contenuto reale di un file.
-
----
-MAPPA DEL PROGETTO (File indicizzati):
-{{{projectContext}}}
-
-{{#if fileContent}}
-CONTENUTO DEL FILE ANALIZZATO:
-{{{fileContent}}}
-{{/if}}
----
-
-RICHIESTA UTENTE: {{{developmentTask}}}
-
-ISTRUZIONI:
-1. Spiega brevemente come il progetto gestisce questa richiesta basandoti sui file della mappa.
-2. Se il contenuto di un file è fornito, analizzalo per dare suggerimenti precisi.
-3. Concludi SEMPRE con un piano d'azione tra tag <PLAN> e </PLAN>.
-4. Il piano deve essere un array JSON: [{"step": "Azione tecnica da compiere"}].
-
-Rispondi in modo professionale.`,
-});
+    try {
+      const fullPath = path.join(projectPath, input.filePath);
+      console.log(`[TOOL-USE] L'agente sta leggendo il file: ${fullPath}`);
+      const content = await fs.readFile(fullPath, 'utf-8');
+      return content.substring(0, 5000); // Limite per evitare overflow di memoria
+    } catch (e: any) {
+      console.error(`[TOOL-ERR] Impossibile leggere ${input.filePath}:`, e.message);
+      return `Errore: Impossibile leggere il file ${input.filePath}.`;
+    }
+  }
+);
 
 export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlanningInputSchema>) {
   const startTime = Date.now();
-  console.log(`\n[AGENT] >>> Nuova richiesta: "${input.developmentTask}"`);
+  console.log(`\n[AGENT-REASONING] >>> Analisi richiesta: "${input.developmentTask}"`);
   
   let projectName = input.projectName;
   if (!projectName) {
@@ -60,44 +56,39 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
     projectName = projects.length > 0 ? projects[0].name : 'project-index';
   }
   
-  console.log(`[AGENT] Caricamento indice: ${projectName}...`);
+  console.log(`[AGENT] Caricamento mappa mentale: ${projectName}...`);
   const projectIndex = await loadProjectIndex(projectName);
-  
-  if (projectIndex.length === 0) {
-    console.warn("[AGENT] Attenzione: l'indice caricato è vuoto.");
-  }
-
-  // Logica di Retrieval (RAG): cerchiamo se l'utente parla di un file specifico
-  let specificFileContent = "";
-  const mentionedFile = projectIndex.find(f => 
-    input.developmentTask.toLowerCase().includes(path.basename(f.filePath).toLowerCase())
-  );
-
-  if (mentionedFile && input.projectPath) {
-    try {
-      const fullPath = path.join(input.projectPath, mentionedFile.filePath);
-      console.log(`[AGENT] Lettura file fisico per analisi profonda: ${fullPath}`);
-      const content = await fs.readFile(fullPath, 'utf-8');
-      specificFileContent = content.substring(0, 8000); // Limite per non saturare la RAM dell'AI
-    } catch (e) {
-      console.error(`[AGENT] Errore lettura file fisico:`, e);
-    }
-  }
-
-  // Limitiamo il contesto della mappa per Ollama
   const projectContext = projectIndex.slice(0, 100).map(f => `- ${f.filePath}: ${f.semanticSummary}`).join('\n');
 
-  console.log(`[AGENT] Interrogazione modello AI in corso...`);
-
   try {
-    const { text } = await agenticTaskPlanningPrompt({
-      developmentTask: input.developmentTask,
-      projectContext,
-      fileContent: specificFileContent || undefined,
+    /**
+     * ESECUZIONE AGENTICA:
+     * L'AI ha a disposizione la mappa (projectContext) e lo strumento (readFileTool).
+     * Se non capisce qualcosa dalla mappa, userà lo strumento per leggere il codice reale.
+     */
+    const response = await ai.generate({
+      model: 'ollama/qwen2.5-coder:7b',
+      system: `Sei un Architetto Software Senior. Hai accesso a una mappa del progetto e allo strumento 'readFile'.
+      
+      MAPPA DEL PROGETTO (Sommario):
+      ${projectContext}
+      
+      ISTRUZIONI:
+      1. Se la richiesta riguarda file specifici, usa 'readFile' per analizzare il codice reale prima di rispondere.
+      2. Spiega tecnicamente cosa fa il codice o come risolvere il problema.
+      3. Includi SEMPRE un piano d'azione JSON racchiuso tra tag <PLAN> e </PLAN>.
+      4. Esempio piano: <PLAN>[{"step": "Modifica db.php"}]</PLAN>`,
+      prompt: input.developmentTask,
+      tools: [readFileTool],
+      // Passiamo il path fisico nei metadati del contesto per il tool
+      config: { 
+        context: { projectPath: input.projectPath } 
+      }
     });
 
+    const text = response.text;
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[AGENT] Risposta ricevuta in ${duration}s.`);
+    console.log(`[AGENT-RESPONSE] Ricevuta in ${duration}s.`);
 
     let plan = [];
     const planMatch = text.match(/<PLAN>([\s\S]*?)<\/PLAN>/);
@@ -105,7 +96,7 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
       try {
         plan = JSON.parse(planMatch[1].trim());
       } catch (e) {
-        console.warn("[AGENT] Il modello ha generato un piano JSON non valido.");
+        console.warn("[AGENT] Piano JSON non valido generato dal modello.");
       }
     }
 
@@ -115,10 +106,10 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
       plan: plan.length > 0 ? plan : undefined
     };
   } catch (error: any) {
-    console.error(`[AGENT] ERRORE CRITICO:`, error.message);
+    console.error(`[AGENT-CRITICAL]`, error.message);
     return { 
-      content: "Il modello AI è andato in timeout o ha esaurito la memoria. Prova a usare un modello più piccolo (es. llama3.2:3b) o a fare domande su singoli file.",
-      plan: [{ step: "Verifica risorse di sistema" }, { step: "Riavvia Ollama" }] 
+      content: "L'agente ha riscontrato un problema durante il ragionamento. Verifica la memoria disponibile.",
+      plan: [{ step: "Riduci la complessità della domanda" }] 
     };
   }
 }
