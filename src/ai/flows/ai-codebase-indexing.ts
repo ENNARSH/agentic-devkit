@@ -53,7 +53,6 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
   const files: string[] = [];
   const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build', '.firebase', 'out', 'vendor', 'storage', 'public/vendor'];
   const ignoreFiles = ['package-lock.json', 'yarn.lock', 'composer.lock', 'pnpm-lock.yaml', '.env', 'favicon.ico', '.DS_Store'];
-  // Alziamo il limite a 500KB dato che ora gestiamo i pezzi
   const MAX_FILE_SIZE = 500 * 1024; 
   
   async function walk(currentDirPath: string) {
@@ -74,15 +73,13 @@ export async function getFilesToProcess(projectPath: string): Promise<string[]> 
         }
       } else if (entry.isFile()) {
         const fileExtension = path.extname(entry.name).toLowerCase();
-        const validExts = ['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css', '.php', '.py', '.html', '.sql', '.yaml', '.yml'];
+        const validExts = ['.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css', '.php', '.py', '.html', '.sql', '.yaml', '.yml', '.blade.php'];
         
-        if (validExts.includes(fileExtension) && !ignoreFiles.includes(entry.name)) {
+        if ((validExts.includes(fileExtension) || entry.name.endsWith('.blade.php')) && !ignoreFiles.includes(entry.name)) {
           try {
             const stats = await fs.stat(fullPath);
             if (stats.size <= MAX_FILE_SIZE) {
               files.push(relativePath);
-            } else {
-              console.log(`[INDEXER] Salto ${relativePath}: troppo grande (${Math.round(stats.size/1024)}KB)`);
             }
           } catch (e) {}
         }
@@ -135,44 +132,47 @@ const summarizeLargeFileChunksPrompt = ai.definePrompt({
 
 export async function indexFileSemantic(input: { projectPath: string, relativeFilePath: string }) {
   const fullPath = path.join(input.projectPath, input.relativeFilePath);
+  let result;
+  
   try {
     const content = await fs.readFile(fullPath, 'utf-8');
+    let summary = "";
     
-    // Se il file è piccolo (< 4000 caratteri), lo mandiamo intero
     if (content.length <= 4000) {
       const { text } = await summarizeFilePrompt({
         filePath: input.relativeFilePath,
         content,
       });
-      return {
+      summary = text?.trim() || "File sorgente del progetto.";
+    } else {
+      const chunkSize = 2000;
+      const chunks = [
+        content.substring(0, chunkSize),
+        content.substring(Math.floor(content.length / 2) - chunkSize / 2, Math.floor(content.length / 2) + chunkSize / 2),
+        content.substring(content.length - chunkSize)
+      ];
+
+      const { text } = await summarizeLargeFileChunksPrompt({
         filePath: input.relativeFilePath,
-        semanticSummary: text?.trim() || "File sorgente del progetto.",
-      };
-    } 
-    
-    // Se il file è grande, estraiamo 3 pezzi strategici
-    const chunkSize = 2000;
-    const chunks = [
-      content.substring(0, chunkSize), // Inizio (Import, definizioni)
-      content.substring(Math.floor(content.length / 2) - chunkSize / 2, Math.floor(content.length / 2) + chunkSize / 2), // Centro (Logica core)
-      content.substring(content.length - chunkSize) // Fine (Esportazioni, chiusura)
-    ];
+        chunks,
+      });
+      summary = text?.trim() || "File di grandi dimensioni del progetto.";
+    }
 
-    const { text } = await summarizeLargeFileChunksPrompt({
+    result = {
       filePath: input.relativeFilePath,
-      chunks,
-    });
-
-    return {
-      filePath: input.relativeFilePath,
-      semanticSummary: text?.trim() || "File di grandi dimensioni del progetto.",
+      semanticSummary: summary,
     };
 
   } catch (error) {
-    console.error(`[INDEXER] Errore su ${input.relativeFilePath}:`, error);
-    return {
+    result = {
       filePath: input.relativeFilePath,
-      semanticSummary: "File di codice.",
+      semanticSummary: "Analisi non riuscita o file binario.",
     };
   }
+
+  // LOG A TERMINALE RICHIESTO DALL'UTENTE
+  console.log(`[INDEXER-RESULT]`, JSON.stringify(result, null, 2));
+  
+  return result;
 }
