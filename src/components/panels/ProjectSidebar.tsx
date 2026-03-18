@@ -38,12 +38,13 @@ import { getFilesToProcess, indexFileSemantic, saveProjectIndex, listIndexedProj
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-// Lista dei modelli disponibili basata sull'output dell'utente
+// Lista dei modelli aggiornata sulla base di 'ollama list' dell'utente
 const AVAILABLE_MODELS = [
-  { id: "qwen2.5-coder:7b", name: "Qwen 2.5 Coder 7B (Consigliato)", type: "code" },
-  { id: "qwen2.5-coder:14b", name: "Qwen 2.5 Coder 14B (Potente)", type: "code" },
-  { id: "deepseek-r1:8b", name: "DeepSeek R1 8B (Ragionamento)", type: "logic" },
   { id: "gemma3:latest", name: "Gemma 3 (Multimodale)", type: "general" },
+  { id: "gemma3:4b", name: "Gemma 3 4B", type: "general" },
+  { id: "qwen2.5-coder:7b", name: "Qwen 2.5 Coder 7B", type: "code" },
+  { id: "qwen2.5-coder:14b", name: "Qwen 2.5 Coder 14B", type: "code" },
+  { id: "deepseek-r1:8b", name: "DeepSeek R1 8B", type: "logic" },
   { id: "llama3.1:latest", name: "Llama 3.1 8B", type: "general" },
   { id: "mistral:latest", name: "Mistral 7B", type: "general" },
   { id: "gpt-oss:20b", name: "GPT OSS 20B", type: "large" },
@@ -67,7 +68,6 @@ export function ProjectSidebar() {
 
   React.useEffect(() => {
     refreshProjectsList();
-    // Recupera l'ultimo progetto e modello attivo
     const lastProject = localStorage.getItem('activeProjectName');
     const lastPath = localStorage.getItem(`path_${lastProject}`);
     const lastModel = localStorage.getItem('selectedModel');
@@ -181,7 +181,6 @@ export function ProjectSidebar() {
       </SidebarHeader>
       
       <SidebarContent>
-        {/* Sezione Modello AI */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-primary/70 text-[10px] uppercase font-bold tracking-wider">Modello Intelligenza</SidebarGroupLabel>
           <SidebarGroupContent className="px-2 pb-2">
