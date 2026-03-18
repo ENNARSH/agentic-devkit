@@ -43,6 +43,7 @@ const AVAILABLE_MODELS = [
   { id: "qwen2.5-coder:7b", name: "Qwen 2.5 Coder 7B (Consigliato)", type: "code" },
   { id: "qwen2.5-coder:14b", name: "Qwen 2.5 Coder 14B (Potente)", type: "code" },
   { id: "deepseek-r1:8b", name: "DeepSeek R1 8B (Ragionamento)", type: "logic" },
+  { id: "gemma3:latest", name: "Gemma 3 (Multimodale)", type: "general" },
   { id: "llama3.1:latest", name: "Llama 3.1 8B", type: "general" },
   { id: "mistral:latest", name: "Mistral 7B", type: "general" },
   { id: "gpt-oss:20b", name: "GPT OSS 20B", type: "large" },
