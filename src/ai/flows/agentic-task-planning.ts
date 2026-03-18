@@ -88,23 +88,39 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
       2. Non inventare il contenuto dei file. Se non hai letto un file con 'readFile', ammetti di non conoscerlo e usalo.
       3. Rispondi sempre in Italiano.
       4. Se generi un piano d'azione, racchiudilo tra tag <PLAN>[{"step": "..."}]</PLAN>.
-      5. Se decidi di usare un tool, scrivi il comando JSON in una riga separata.`;
+      5. Se decidi di usare un tool e il sistema non lo supporta nativamente, scrivi il comando JSON ESATTO in una riga separata: {"name": "readFile", "arguments": {"filePath": "percorso/file"}}.`;
 
-    let response = await ai.generate({
-      model: selectedModel as any,
-      history: input.history as any,
-      system: systemInstruction,
-      prompt: input.developmentTask,
-      tools: [readFileTool],
-      config: { 
-        context: { projectPath: input.projectPath }
+    let response;
+    try {
+      response = await ai.generate({
+        model: selectedModel as any,
+        history: input.history as any,
+        system: systemInstruction,
+        prompt: input.developmentTask,
+        tools: [readFileTool],
+        config: { 
+          context: { projectPath: input.projectPath }
+        }
+      });
+    } catch (toolError: any) {
+      if (toolError.message.includes("support tools")) {
+        console.warn(`[AGENT-WARN] Modello ${selectedModel} riporta errore Tools. Tento fallback senza tools...`);
+        // Fallback: Chiediamo all'IA di sputare il JSON se vuole leggere un file
+        response = await ai.generate({
+          model: selectedModel as any,
+          history: input.history as any,
+          system: systemInstruction + "\nIMPORTANTE: Dato che i tools nativi sono disattivati, scrivi il JSON del tool se devi leggere un file.",
+          prompt: input.developmentTask,
+        });
+      } else {
+        throw toolError;
       }
-    });
+    }
 
     let text = response.text || "";
     
     // --- MANUALE TOOL DETECTION MIGLIORATA ---
-    // Cerchiamo il JSON del tool call ovunque nel testo
+    // Cerchiamo il JSON del tool call ovunque nel testo (anche se sporco)
     const toolCallMatch = text.match(/\{"name":\s*"readFile",\s*"arguments":\s*\{"filePath":\s*"([^"]+)"\}\}/);
     
     if (toolCallMatch) {
