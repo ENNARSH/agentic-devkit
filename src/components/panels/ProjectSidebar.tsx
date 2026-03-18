@@ -40,11 +40,22 @@ import { cn } from "@/lib/utils";
 
 // Lista dei modelli disponibili basata sull'output dell'utente
 const AVAILABLE_MODELS = [
+  // Qwen (coding)
   { id: "qwen2.5-coder:7b", name: "Qwen 2.5 Coder 7B (Consigliato)", type: "code" },
   { id: "qwen2.5-coder:14b", name: "Qwen 2.5 Coder 14B (Potente)", type: "code" },
+
+  // Gemma (NUOVI)
+  { id: "gemma3:latest", name: "Gemma 3 (Latest)", type: "general" },
+  { id: "gemma3:4b", name: "Gemma 3 4B (Leggero)", type: "general" },
+
+  // Reasoning
   { id: "deepseek-r1:8b", name: "DeepSeek R1 8B (Ragionamento)", type: "logic" },
+
+  // General
   { id: "llama3.1:latest", name: "Llama 3.1 8B", type: "general" },
   { id: "mistral:latest", name: "Mistral 7B", type: "general" },
+
+  // Large
   { id: "gpt-oss:20b", name: "GPT OSS 20B", type: "large" },
 ];
 
