@@ -1,0 +1,238 @@
+[
+  {
+    "filePath": "apphosting.yaml",
+    "semanticSummary": "Impostazioni per configurare e gestire un backend Firebase App Hosting."
+  },
+  {
+    "filePath": "components.json",
+    "semanticSummary": "Configura le impostazioni di stile e alias per il progetto React."
+  },
+  {
+    "filePath": "docs\\blueprint.md",
+    "semanticSummary": "Il file descrive le caratteristiche e lo stile per un sito web di presentazione professionale chiamato PortfolioPilot."
+  },
+  {
+    "filePath": "firebase.json",
+    "semanticSummary": "Configurazione di hosting per il sito web \"gennaroliguoridev\" su Firebase."
+  },
+  {
+    "filePath": "next-env.d.ts",
+    "semanticSummary": "Questo file è un tipo di dati per TypeScript per la configurazione Next.js."
+  },
+  {
+    "filePath": "next.config.ts",
+    "semanticSummary": "Configurazione del progetto Next.js per utilizzare TypeScript e variabili di ambiente."
+  },
+  {
+    "filePath": "package.json",
+    "semanticSummary": "Il file package.json definisce le dipendenze e le configurazioni di sviluppo per un progetto Next.js."
+  },
+  {
+    "filePath": "README.md",
+    "semanticSummary": "Questo file è un repository di esempio per un'applicazione NextJS su Firebase."
+  },
+  {
+    "filePath": "src\\ai\\dev.ts",
+    "semanticSummary": "Carica le configurazioni di ambiente da un file .env."
+  },
+  {
+    "filePath": "src\\ai\\genkit.ts",
+    "semanticSummary": "Carica una versione personalizzata del framework AI GenKit con plugin Google AI."
+  },
+  {
+    "filePath": "src\\app\\globals.css",
+    "semanticSummary": "Questo file definisce gli stili di base per l'applicazione utilizzando Tailwind CSS, inclusi colori e design di componenti."
+  },
+  {
+    "filePath": "src\\app\\layout.tsx",
+    "semanticSummary": "Definisce la struttura di base per la pagina web del portafoglio personale \"DevGen\"."
+  },
+  {
+    "filePath": "src\\app\\page.tsx",
+    "semanticSummary": "Questo file definisce la struttura della pagina Home dell'applicazione."
+  },
+  {
+    "filePath": "src\\components\\about.tsx",
+    "semanticSummary": "Il file descrive la pagina \"Chi Sono\" di un sito web personale, contenente informazioni biografiche e una lista delle tecnologie utilizzate."
+  },
+  {
+    "filePath": "src\\components\\contact.tsx",
+    "semanticSummary": "Questa componente React si occupa di visualizzare le informazioni di contatto dell'autore."
+  },
+  {
+    "filePath": "src\\components\\footer.tsx",
+    "semanticSummary": "Il file definisce la sezione del footer di una pagina web."
+  },
+  {
+    "filePath": "src\\components\\header.tsx",
+    "semanticSummary": "Definisce un layout standard per la barra di navigazione del sito web."
+  },
+  {
+    "filePath": "src\\components\\hero.tsx",
+    "semanticSummary": "Definisce un componente di presentazione \"Eroe\" per la homepage del sito web."
+  },
+  {
+    "filePath": "src\\components\\projects.tsx",
+    "semanticSummary": "Il file \"projects.tsx\" è una componente React che visualizza una selezione di progetti svolti dall'autore con immagini e descrizioni."
+  },
+  {
+    "filePath": "src\\components\\ui\\accordion.tsx",
+    "semanticSummary": "Il file implementa un componente di accordion personalizzato per React."
+  },
+  {
+    "filePath": "src\\components\\ui\\alert-dialog.tsx",
+    "semanticSummary": "Implementazione di un componente Alert Dialog personalizzabile."
+  },
+  {
+    "filePath": "src\\components\\ui\\alert.tsx",
+    "semanticSummary": "Il file definisce un componente di avviso personalizzabile per mostrare messaggi adeguate all'utente."
+  },
+  {
+    "filePath": "src\\components\\ui\\avatar.tsx",
+    "semanticSummary": "Questo file definisce un componente React per visualizzare immagini di profilo (avatar)."
+  },
+  {
+    "filePath": "src\\components\\ui\\badge.tsx",
+    "semanticSummary": "Questo file definisce un componente React \"Badge\" con variante di stile personalizzabile."
+  },
+  {
+    "filePath": "src\\components\\ui\\button.tsx",
+    "semanticSummary": "Questo file definisce un componente di bottone personalizzabile per React."
+  },
+  {
+    "filePath": "src\\components\\ui\\calendar.tsx",
+    "semanticSummary": "Questo file definisce un componente React chiamato \"Calendar\" per visualizzare e gestire una calenda."
+  },
+  {
+    "filePath": "src\\components\\ui\\card.tsx",
+    "semanticSummary": "Definisce una struttura comune per componenti di tipo card utilizzabile in vari contesti."
+  },
+  {
+    "filePath": "src\\components\\ui\\carousel.tsx",
+    "semanticSummary": "Definire un componente UI per gestire una serie di immagini come carosello."
+  },
+  {
+    "filePath": "src\\components\\ui\\chart.tsx",
+    "semanticSummary": "Eseguire renderizzazione di grafici dinamici con configurazione personalizzabile."
+  },
+  {
+    "filePath": "src\\components\\ui\\checkbox.tsx",
+    "semanticSummary": "Componente di controllo di selezione personalizzabile con estetica Radix UI e icona Lucide React."
+  },
+  {
+    "filePath": "src\\components\\ui\\collapsible.tsx",
+    "semanticSummary": "Questo file esporta componenti per creare un contenuto espandibile con Radix UI."
+  },
+  {
+    "filePath": "src\\components\\ui\\dialog.tsx",
+    "semanticSummary": "Creazione di un componente di dialogo personalizzabile per la visualizzazione dei contenuti."
+  },
+  {
+    "filePath": "src\\components\\ui\\dropdown-menu.tsx",
+    "semanticSummary": "Il file descrive una libreria personalizzata per gestire dropdown menu in React."
+  },
+  {
+    "filePath": "src\\components\\ui\\form.tsx",
+    "semanticSummary": "Questo file definisce una serie di componenti React per la gestione di form, inclusi FormField, FormItem e FormLabel."
+  },
+  {
+    "filePath": "src\\components\\ui\\input.tsx",
+    "semanticSummary": "Questo file contiene un componente React personalizzato per gli input di testo."
+  },
+  {
+    "filePath": "src\\components\\ui\\label.tsx",
+    "semanticSummary": "Questo file definisce un componente React per etichette con variante di stile personalizzabili."
+  },
+  {
+    "filePath": "src\\components\\ui\\menubar.tsx",
+    "semanticSummary": "Definisce un'interfaccia utente per una barra di menu con funzionalità avanzate."
+  },
+  {
+    "filePath": "src\\components\\ui\\popover.tsx",
+    "semanticSummary": "Il file \"popover.tsx\" implementa un componente di popover personalizzato per l'interfaccia utente."
+  },
+  {
+    "filePath": "src\\components\\ui\\progress.tsx",
+    "semanticSummary": "Il file implementa un componente UI per visualizzare il progresso di una trasformazione."
+  },
+  {
+    "filePath": "src\\components\\ui\\radio-group.tsx",
+    "semanticSummary": "Questo file definisce un componente UI per gruppi di pulsanti radio personalizzati."
+  },
+  {
+    "filePath": "src\\components\\ui\\scroll-area.tsx",
+    "semanticSummary": "Il file contiene componenti React per gestire l'area di scorrimento di un elemento della UI."
+  },
+  {
+    "filePath": "src\\components\\ui\\select.tsx",
+    "semanticSummary": "Questo file fornisce componenti React personalizzate per un menu a discesa (select) utilizzando la libreria Radix UI."
+  },
+  {
+    "filePath": "src\\components\\ui\\separator.tsx",
+    "semanticSummary": "Il file definisce un componente React personalizzato per una linea di separazione."
+  },
+  {
+    "filePath": "src\\components\\ui\\sheet.tsx",
+    "semanticSummary": "Questo file definisce un componente di schermo personalizzabile per una applicazione React."
+  },
+  {
+    "filePath": "src\\components\\ui\\sidebar.tsx",
+    "semanticSummary": "Definisce e gestisce lo stato di un sidebar personalizzabile in una applicazione."
+  },
+  {
+    "filePath": "src\\components\\ui\\skeleton.tsx",
+    "semanticSummary": "Il file definisce un componente UI per la visualizzazione di una struttura vuota."
+  },
+  {
+    "filePath": "src\\components\\ui\\slider.tsx",
+    "semanticSummary": "Questo file contiene un componente React per una barra di scorrimento personalizzata."
+  },
+  {
+    "filePath": "src\\components\\ui\\switch.tsx",
+    "semanticSummary": "Il file descrive un componente React per una barra di selezione (switch) personalizzata."
+  },
+  {
+    "filePath": "src\\components\\ui\\table.tsx",
+    "semanticSummary": "Il file fornisce una serie di componenti React per creare tabelle personalizzate."
+  },
+  {
+    "filePath": "src\\components\\ui\\tabs.tsx",
+    "semanticSummary": "Il file definisce un componente UI personalizzato per la gestione di sezioni multiple (tabs) all'interno di una pagina web."
+  },
+  {
+    "filePath": "src\\components\\ui\\textarea.tsx",
+    "semanticSummary": "Definisce un componente React Textarea personalizzato con stili e funzionalità aggiuntive."
+  },
+  {
+    "filePath": "src\\components\\ui\\toast.tsx",
+    "semanticSummary": "Definire componenti React per gestire notifiche (toast) personalizzabili."
+  },
+  {
+    "filePath": "src\\components\\ui\\toaster.tsx",
+    "semanticSummary": "Questo file gestisce la visualizzazione di avvisi (toasts) nella applicazione."
+  },
+  {
+    "filePath": "src\\components\\ui\\tooltip.tsx",
+    "semanticSummary": "Questo file fornisce una implementazione personalizzata di un tooltip per l'applicazione."
+  },
+  {
+    "filePath": "src\\hooks\\use-mobile.tsx",
+    "semanticSummary": "Il file \"use-mobile.tsx\" fornisce un hook React per determinare se l'utente sta utilizzando un dispositivo mobile."
+  },
+  {
+    "filePath": "src\\hooks\\use-toast.ts",
+    "semanticSummary": "Questo file definisce un meccanismo di gestione delle notifiche (toast) per una applicazione React."
+  },
+  {
+    "filePath": "src\\lib\\utils.ts",
+    "semanticSummary": "Funzionalità di combinazione e formattazione delle classi CSS utilizzando Tailwind."
+  },
+  {
+    "filePath": "tailwind.config.ts",
+    "semanticSummary": "Questo file di configurazione Tailwind definisce le regole e i colori del design dell'applicazione."
+  },
+  {
+    "filePath": "tsconfig.json",
+    "semanticSummary": "Configura il compilatore TypeScript per generare codice ES2017 e utilizzare Next.js."
+  }
+]
