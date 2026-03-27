@@ -1,6 +1,6 @@
 'use server';
 /**
- * @fileOverview Flow agentico con supporto per la cronologia (memoria) e log di debug avanzati.
+ * @fileOverview Flow agentico ottimizzato per file di grandi dimensioni e refactoring strutturato.
  */
 
 import { ai } from '@/ai/genkit';
@@ -14,45 +14,93 @@ const MessageSchema = z.object({
   content: z.string(),
 });
 
-const AgenticTaskPlanningInputSchema = z.object({
-  developmentTask: z.string(),
-  history: z.array(MessageSchema).optional(),
-  projectName: z.string().optional(),
-  projectPath: z.string().optional(),
-  model: z.string().optional(),
-});
-
-const readFileTool = ai.defineTool(
+const getFileInfoTool = ai.defineTool(
   {
-    name: 'readFile',
-    description: 'Legge il contenuto reale di un file sul disco. USALO SEMPRE se devi spiegare logica specifica o trovare bug in un file.',
+    name: 'getFileInfo',
+    description: 'Ottiene metadati su un file (dimensione, numero di righe). USALO su file molto grandi prima di leggerli.',
     inputSchema: z.object({
-      filePath: z.string().describe('Percorso relativo del file all\'interno del progetto.'),
+      filePath: z.string().describe('Percorso relativo del file.'),
+    }),
+    outputSchema: z.object({
+      size: z.number(),
+      lineCount: z.number(),
+      readable: z.boolean(),
+    }),
+  },
+  async (input, { context }) => {
+    const projectPath = (context as any)?.projectPath;
+    if (!projectPath) return { size: 0, lineCount: 0, readable: false };
+    
+    try {
+      const fullPath = path.join(projectPath, input.filePath);
+      const content = await fs.readFile(fullPath, 'utf-8');
+      const lines = content.split('\n');
+      return {
+        size: content.length,
+        lineCount: lines.length,
+        readable: true
+      };
+    } catch (e) {
+      return { size: 0, lineCount: 0, readable: false };
+    }
+  }
+);
+
+const readFileLinesTool = ai.defineTool(
+  {
+    name: 'readFileLines',
+    description: 'Legge un range specifico di righe da un file. Utile per processare file enormi pezzo per pezzo.',
+    inputSchema: z.object({
+      filePath: z.string().describe('Percorso relativo del file.'),
+      startLine: z.number().describe('Riga di inizio (base 1).'),
+      endLine: z.number().describe('Riga di fine.'),
     }),
     outputSchema: z.string(),
   },
   async (input, { context }) => {
     const projectPath = (context as any)?.projectPath;
-    console.log(`\n[TOOL-USE] L'agente sta chiamando 'readFile' per: ${input.filePath}`);
-    
-    if (!projectPath) {
-      console.error(`[TOOL-ERROR] Percorso progetto mancante nel contesto.`);
-      return "Errore: Percorso progetto non configurato.";
+    if (!projectPath) return "Errore: Percorso progetto non configurato.";
+
+    try {
+      const fullPath = path.join(projectPath, input.filePath);
+      const content = await fs.readFile(fullPath, 'utf-8');
+      const lines = content.split('\n');
+      const selection = lines.slice(input.startLine - 1, input.endLine);
+      
+      console.log(`[TOOL-USE] Lettura righe ${input.startLine}-${input.endLine} di ${input.filePath}`);
+      
+      return selection.join('\n');
+    } catch (e: any) {
+      return `Errore: ${e.message}`;
     }
+  }
+);
+
+const readFileTool = ai.defineTool(
+  {
+    name: 'readFile',
+    description: 'Legge il contenuto reale di un file. Se il file è > 500 righe, preferisci readFileLines.',
+    inputSchema: z.object({
+      filePath: z.string().describe('Percorso relativo del file.'),
+    }),
+    outputSchema: z.string(),
+  },
+  async (input, { context }) => {
+    const projectPath = (context as any)?.projectPath;
+    console.log(`\n[TOOL-USE] Lettura file completo: ${input.filePath}`);
+    
+    if (!projectPath) return "Errore: Percorso progetto mancante.";
 
     try {
       const fullPath = path.join(projectPath, input.filePath);
       const content = await fs.readFile(fullPath, 'utf-8');
       
-      console.log(`[TOOL-SUCCESS] Letto file ${input.filePath} (${content.length} caratteri).`);
-      
-      if (content.length > 15000) {
-        return content.substring(0, 15000) + "\n\n...[CONTENUTO TRONCATO PER DIMENSIONI ECCESSIVE]...";
+      if (content.length > 20000) {
+        return content.substring(0, 20000) + "\n\n...[CONTENUTO TRONCATO] Il file è troppo grande. Usa getFileInfo e readFileLines per analizzarlo meglio.";
       }
       return content;
     } catch (e: any) {
-      console.error(`[TOOL-ERROR] Errore lettura file: ${e.message}`);
-      return `Errore durante la lettura del file: ${e.message}. Assicurati che il percorso sia corretto.`;
+      return `Errore: ${e.message}`;
     }
   }
 );
@@ -76,63 +124,59 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
   const projectSummary = projectIndex.map(f => `- ${f.filePath}: ${f.semanticSummary}`).join('\n');
 
   try {
-    console.log(`[AGENT-REASONING] L'agente sta elaborando con ${input.history?.length || 0} messaggi di memoria...`);
-    
-    const systemInstruction = `Sei un Ingegnere del Software Senior esperto in analisi del codice.
+    const systemInstruction = `Sei un Ingegnere del Software Senior esperto in refactoring di grandi codebase.
       
-      CONTESTO DEL PROGETTO (Mappa dei file):
+      PROGETTO ATTUALE: ${projectName}
+      MAPPA FILE DISPONIBILI:
       ${projectSummary}
       
-      REGOLE DI COMPORTAMENTO:
-      1. Se l'utente chiede di un file specifico o di una logica che non conosci nel dettaglio, USA IMMEDIATAMENTE il tool 'readFile' per leggerlo. NON CHIEDERE IL PERMESSO.
-      2. Non inventare il contenuto dei file. Se non hai letto un file con 'readFile', ammetti di non conoscerlo e usalo.
-      3. Rispondi sempre in Italiano.
-      4. Se generi un piano d'azione, racchiudilo tra tag <PLAN>[{"step": "..."}]</PLAN>.
-      5. Se decidi di usare un tool e il sistema non lo supporta nativamente, scrivi il comando JSON ESATTO in una riga separata: {"name": "readFile", "arguments": {"filePath": "percorso/file"}}.`;
+      REGOLE PER FILE GRANDI (> 500 righe):
+      1. Se l'utente ti chiede di analizzare o spezzettare un file enorme, USA 'getFileInfo' per capire quanto è lungo.
+      2. Non cercare di leggere tutto il file in una volta. Leggilo a blocchi logici usando 'readFileLines' (es. 1-300, poi 301-600).
+      3. Identifica i moduli logici (classi, funzioni export, costanti) e proponi un piano di separazione in nuovi file.
+      4. Per ogni pezzo che estrai, scrivi il codice completo pronto per il nuovo file.
 
-    let response;
-    try {
-      response = await ai.generate({
-        model: selectedModel as any,
-        history: input.history as any,
-        system: systemInstruction,
-        prompt: input.developmentTask,
-        tools: [readFileTool],
-        config: { 
-          context: { projectPath: input.projectPath }
-        }
-      });
-    } catch (toolError: any) {
-      if (toolError.message.includes("support tools")) {
-        console.warn(`[AGENT-WARN] Modello ${selectedModel} riporta errore Tools. Tento fallback senza tools...`);
-        // Fallback: Chiediamo all'IA di sputare il JSON se vuole leggere un file
-        response = await ai.generate({
-          model: selectedModel as any,
-          history: input.history as any,
-          system: systemInstruction + "\nIMPORTANTE: Dato che i tools nativi sono disattivati, scrivi il JSON del tool se devi leggere un file.",
-          prompt: input.developmentTask,
-        });
-      } else {
-        throw toolError;
-      }
-    }
+      FORMATO RISPOSTA:
+      - Rispondi in Italiano.
+      - Se generi un piano, usa: <PLAN>[{"step": "descrizione"}]</PLAN>.
+      - Se vuoi usare un tool ma Genkit lo blocca, scrivi il JSON in una riga isolata: {"name": "readFileLines", "arguments": {"filePath": "...", "startLine": 1, "endLine": 300}}.`;
+
+    // Esecuzione generazione AI con fallback manuale per i Tools
+    let response = await ai.generate({
+      model: selectedModel as any,
+      history: input.history as any,
+      system: systemInstruction,
+      prompt: input.developmentTask,
+      tools: [readFileTool, readFileLinesTool, getFileInfoTool],
+      config: { context: { projectPath: input.projectPath } }
+    });
 
     let text = response.text || "";
     
-    // --- MANUALE TOOL DETECTION MIGLIORATA ---
-    // Cerchiamo il JSON del tool call ovunque nel testo (anche se sporco)
-    const toolCallMatch = text.match(/\{"name":\s*"readFile",\s*"arguments":\s*\{"filePath":\s*"([^"]+)"\}\}/);
-    
-    if (toolCallMatch) {
-      const filePath = toolCallMatch[1];
-      console.log(`[AGENT-MANUAL-LOOP] Rilevata tool call nel testo per: ${filePath}. Esecuzione manuale...`);
-      
-      const fileContent = await readFileTool({ filePath }, { context: { projectPath: input.projectPath } } as any);
-      
-      console.log(`[AGENT-MANUAL-LOOP] Contenuto file ottenuto. Chiedo all'AI di analizzarlo...`);
-      
-      // Chiamata di follow-up con il contenuto del file per completare la risposta
-      const followUpResponse = await ai.generate({
+    // LOOP MANUALE DI RAGIONAMENTO (Se l'AI sputa JSON invece di chiamare il tool)
+    const toolPatterns = [
+      /\{"name":\s*"getFileInfo",\s*"arguments":\s*\{"filePath":\s*"([^"]+)"\}\}/,
+      /\{"name":\s*"readFileLines",\s*"arguments":\s*\{"filePath":\s*"([^"]+)",\s*"startLine":\s*(\d+),\s*"endLine":\s*(\d+)\}\}/,
+      /\{"name":\s*"readFile",\s*"arguments":\s*\{"filePath":\s*"([^"]+)"\}\}/
+    ];
+
+    let match = null;
+    let toolResult = null;
+
+    if (match = text.match(toolPatterns[0])) { // getFileInfo
+      console.log(`[AGENT-MANUAL-LOOP] Eseguo getFileInfo per: ${match[1]}`);
+      const info = await getFileInfoTool({ filePath: match[1] }, { context: { projectPath: input.projectPath } } as any);
+      toolResult = JSON.stringify(info);
+    } else if (match = text.match(toolPatterns[1])) { // readFileLines
+      console.log(`[AGENT-MANUAL-LOOP] Eseguo readFileLines ${match[2]}-${match[3]} per: ${match[1]}`);
+      toolResult = await readFileLinesTool({ filePath: match[1], startLine: parseInt(match[2]), endLine: parseInt(match[3]) }, { context: { projectPath: input.projectPath } } as any);
+    } else if (match = text.match(toolPatterns[2])) { // readFile
+      console.log(`[AGENT-MANUAL-LOOP] Eseguo readFile per: ${match[1]}`);
+      toolResult = await readFileTool({ filePath: match[1] }, { context: { projectPath: input.projectPath } } as any);
+    }
+
+    if (toolResult) {
+      const followUp = await ai.generate({
         model: selectedModel as any,
         history: [
           ...(input.history || []), 
@@ -140,15 +184,12 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
           { role: 'assistant', content: text }
         ] as any,
         system: systemInstruction,
-        prompt: `Contenuto del file '${filePath}':\n\n${fileContent}\n\nAnalizza questo codice e rispondi alla richiesta dell'utente.`,
+        prompt: `RISULTATO TOOL:\n${toolResult}\n\nContinua l'analisi o il refactoring basandoti su questi dati.`,
       });
-      
-      text = followUpResponse.text || "";
+      text = followUp.text || "";
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[AGENT-RESPONSE] Caratteri ricevuti: ${text.length}`);
-    console.log(`[AGENT-RESPONSE-PREVIEW] ${text.substring(0, 150).replace(/\n/g, ' ')}...`);
     console.log(`[AGENT-END] Operazione completata in ${duration}s.`);
 
     let plan = [];
@@ -158,14 +199,19 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
     }
 
     return {
-      content: text.replace(/<PLAN>[\s\S]*?<\/PLAN>/g, '').trim() || "Il modello non ha prodotto testo. Prova a cambiare modello o essere più specifico.",
+      content: text.replace(/<PLAN>[\s\S]*?<\/PLAN>/g, '').trim() || "Il modello non ha risposto. Prova a cambiare modello o range di righe.",
       plan: plan.length > 0 ? plan : undefined
     };
   } catch (error: any) {
-    console.error(`[AGENT-ERROR] Errore critico:`, error.message);
-    return { 
-      content: `Errore: ${error.message}. Verifica che Ollama sia attivo con 'ollama list'.`,
-      plan: [{ step: "Riavvia Ollama" }] 
-    };
+    console.error(`[AGENT-ERROR]`, error.message);
+    return { content: `Errore: ${error.message}.` };
   }
 }
+
+const AgenticTaskPlanningInputSchema = z.object({
+  developmentTask: z.string(),
+  history: z.array(MessageSchema).optional(),
+  projectName: z.string().optional(),
+  projectPath: z.string().optional(),
+  model: z.string().optional(),
+});
