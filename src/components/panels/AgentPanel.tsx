@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Send, Bot, User, Sparkles } from "lucide-react";
+import { Send, Bot, User, Sparkles, CheckCircle2, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -24,12 +24,12 @@ export function AgentPanel() {
     {
       id: "welcome",
       role: "assistant",
-      content: "Pronto ad aiutarti! Seleziona un progetto e un modello dalla sidebar. Ho la memoria attiva: posso ricordare il contesto dei nostri discorsi.",
+      content: "Pronto ad aiutarti! Seleziona un progetto e un modello dalla sidebar. Posso analizzare file di migliaia di righe leggendoli a pezzi: chiedimi pure di analizzarne la struttura.",
       suggestions: [
-        "Cosa fa questo progetto?",
-        "Analizza il file kernel",
-        "Controlla le migrazioni database",
-        "Suggerisci un piano per il mobile"
+        "Analizza struttura MetricsRestService.java",
+        "Suggerisci un piano di refactoring",
+        "Cerca file duplicati",
+        "Spiega la logica del database"
       ]
     },
   ]);
@@ -64,7 +64,6 @@ export function AgentPanel() {
     setIsLoading(true);
 
     try {
-      // Prepariamo la history pulita per l'AI
       const history = newMessages.map(m => ({
         role: m.role,
         content: m.content
@@ -91,7 +90,7 @@ export function AgentPanel() {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: `Ops! L'agente ha impiegato troppo tempo o c'è un errore di connessione con Ollama.`,
+        content: `Ops! L'agente ha impiegato troppo tempo o c'è un errore di connessione con Ollama. Prova a ridurre la complessità della richiesta.`,
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -143,16 +142,21 @@ export function AgentPanel() {
                   )}
 
                   {message.plan && (
-                    <div className="space-y-3 mt-4">
-                      <h4 className="text-[10px] font-bold uppercase tracking-widest text-primary/70">Piano suggerito:</h4>
-                      {message.plan.map((step, idx) => (
-                        <div key={idx} className="flex gap-3 items-start p-3 rounded-lg bg-background/50 border border-border group hover:border-primary/30 transition-all">
-                          <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                            {idx + 1}
+                    <div className="mt-6 space-y-3 p-4 rounded-xl bg-primary/5 border border-primary/10">
+                      <div className="flex items-center gap-2 mb-2">
+                        <ListTodo size={14} className="text-primary" />
+                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-primary/70">Piano d'azione proposto:</h4>
+                      </div>
+                      <div className="grid gap-2">
+                        {message.plan.map((step, idx) => (
+                          <div key={idx} className="flex gap-3 items-start p-3 rounded-lg bg-background/40 border border-border/50 group hover:border-primary/30 transition-all">
+                            <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                              {idx + 1}
+                            </div>
+                            <p className="text-xs leading-snug text-muted-foreground group-hover:text-foreground transition-colors">{step.step}</p>
                           </div>
-                          <p className="text-xs leading-snug">{step.step}</p>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -185,7 +189,7 @@ export function AgentPanel() {
                 handleSubmit(input);
               }
             }}
-            placeholder="Scrivi qui... (l'agente ricorda i messaggi precedenti)"
+            placeholder="Scrivi qui... (es: 'Analizza MetricsRestService.java')"
             className="min-h-[80px] pr-14 py-4 bg-muted/10 border-border/50 focus-visible:ring-primary/20 transition-all resize-none font-body text-sm rounded-xl"
           />
           <div className="absolute right-4 bottom-4">
@@ -193,7 +197,7 @@ export function AgentPanel() {
               type="submit" 
               size="icon" 
               disabled={isLoading || !input.trim()}
-              className="h-9 w-9 rounded-xl bg-primary hover:bg-primary/90 transition-all"
+              className="h-9 w-9 rounded-xl bg-primary hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
             >
               <Send size={18} />
             </Button>

@@ -105,6 +105,14 @@ const readFileTool = ai.defineTool(
   }
 );
 
+const AgenticTaskPlanningInputSchema = z.object({
+  developmentTask: z.string(),
+  history: z.array(MessageSchema).optional(),
+  projectName: z.string().optional(),
+  projectPath: z.string().optional(),
+  model: z.string().optional(),
+});
+
 export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlanningInputSchema>) {
   const startTime = Date.now();
   const rawModelName = input.model || 'qwen2.5-coder:7b';
@@ -138,10 +146,9 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
 
       FORMATO RISPOSTA:
       - Rispondi in Italiano.
-      - Se generi un piano, usa: <PLAN>[{"step": "descrizione"}]</PLAN>.
+      - Se generi un piano d'azione, usa questo formato speciale alla fine del messaggio: <PLAN>[{"step": "descrizione breve"}]</PLAN>.
       - Se vuoi usare un tool ma Genkit lo blocca, scrivi il JSON in una riga isolata: {"name": "readFileLines", "arguments": {"filePath": "...", "startLine": 1, "endLine": 300}}.`;
 
-    // Esecuzione generazione AI con fallback manuale per i Tools
     let response = await ai.generate({
       model: selectedModel as any,
       history: input.history as any,
@@ -184,7 +191,7 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
           { role: 'assistant', content: text }
         ] as any,
         system: systemInstruction,
-        prompt: `RISULTATO TOOL:\n${toolResult}\n\nContinua l'analisi o il refactoring basandoti su questi dati.`,
+        prompt: `RISULTATO TOOL:\n${toolResult}\n\nContinua l'analisi o il refactoring basandoti su questi dati. Ricordati di usare <PLAN> se hai dei passi futuri.`,
       });
       text = followUp.text || "";
     }
@@ -195,23 +202,15 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
     let plan = [];
     const planMatch = text.match(/<PLAN>([\s\S]*?)<\/PLAN>/);
     if (planMatch) {
-      try { plan = JSON.parse(planMatch[1].trim()); } catch (e) {}
+      try { plan = JSON.parse(planMatch[1].trim()); } catch (e) { console.error("Plan parse error", e); }
     }
 
     return {
-      content: text.replace(/<PLAN>[\s\S]*?<\/PLAN>/g, '').trim() || "Il modello non ha risposto. Prova a cambiare modello o range di righe.",
+      content: text.replace(/<PLAN>[\s\S]*?<\/PLAN>/g, '').trim() || "Il modello ha avuto un'esitazione. Prova a essere più specifico nel range di righe.",
       plan: plan.length > 0 ? plan : undefined
     };
   } catch (error: any) {
     console.error(`[AGENT-ERROR]`, error.message);
-    return { content: `Errore: ${error.message}.` };
+    return { content: `Errore: ${error.message}. Assicurati che Ollama sia attivo.` };
   }
 }
-
-const AgenticTaskPlanningInputSchema = z.object({
-  developmentTask: z.string(),
-  history: z.array(MessageSchema).optional(),
-  projectName: z.string().optional(),
-  projectPath: z.string().optional(),
-  model: z.string().optional(),
-});
