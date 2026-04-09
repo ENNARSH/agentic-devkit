@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Send, Bot, User, Sparkles, CheckCircle2, ListTodo, Info } from "lucide-react";
+import { Send, Bot, User, Sparkles, CheckCircle2, ListTodo, Info, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -24,12 +24,12 @@ export function AgentPanel() {
     {
       id: "welcome",
       role: "assistant",
-      content: "### Benvenuto nel tuo Workspace Agentico\nSegui questi passi per lavorare su un progetto locale:\n\n1. **Indicizza**: Inserisci il path nella sidebar e clicca 'Indicizza Ora'.\n2. **Modello**: Seleziona `qwen2.5-coder` per refactoring complessi.\n3. **Task**: Chiedi di analizzare un file. Se è grande, userò `readFileLines` per leggerlo a pezzi.\n4. **Piano**: Genererò un piano d'azione che potrai confermare passo dopo passo.",
+      content: "### Benvenuto nel tuo Workspace Agentico\nPosso aiutarti a fare refactoring di codice esistente o **creare nuovi progetti da zero**.\n\n**Protocollo Operativo:**\n1. **Analisi**: Esamino il tuo input o i file esistenti.\n2. **Pianificazione**: Genero un piano d'azione strutturato.\n3. **Esecuzione**: Scrivo i file e applico le modifiche.\n\nCosa vogliamo costruire oggi?",
       suggestions: [
+        "Inizia un nuovo progetto Next.js con Tailwind",
+        "Crea un'API Laravel per gestione magazzino",
         "Analizza MetricsRestService.java",
-        "Proponi refactoring per il layout mobile",
-        "Spiega la logica di SendKmReminder.php",
-        "Cerca file inutilizzati"
+        "Spiega la logica di SendKmReminder.php"
       ]
     },
   ]);
@@ -69,6 +69,8 @@ export function AgentPanel() {
         content: m.content
       }));
 
+      console.log(`[FRONTEND] Invio task: "${text}" con modello: ${selectedModel}`);
+
       const result = await agenticTaskPlanning({ 
         developmentTask: text,
         history: history,
@@ -77,6 +79,8 @@ export function AgentPanel() {
         model: selectedModel
       });
       
+      console.log(`[FRONTEND] Risposta ricevuta:`, result);
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
@@ -90,7 +94,7 @@ export function AgentPanel() {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: `Ops! L'agente ha impiegato troppo tempo o c'è un errore di connessione con Ollama. Prova a ridurre la complessità della richiesta.`,
+        content: `Ops! L'agente ha impiegato troppo tempo o c'è un errore di connessione con Ollama. Prova a ridurre la complessità della richiesta o verifica che il modello sia attivo.`,
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -134,7 +138,7 @@ export function AgentPanel() {
                           className="text-[11px] h-7 bg-background/50 hover:bg-primary/10"
                           onClick={() => handleSubmit(suggestion)}
                         >
-                          <Sparkles size={10} className="mr-1.5" />
+                          {suggestion.includes("Inizia") ? <Rocket size={10} className="mr-1.5 text-primary" /> : <Sparkles size={10} className="mr-1.5" />}
                           {suggestion}
                         </Button>
                       ))}
@@ -189,7 +193,7 @@ export function AgentPanel() {
                 handleSubmit(input);
               }
             }}
-            placeholder="Scrivi qui... (es: 'Analizza MetricsRestService.java')"
+            placeholder="Descrivi cosa vuoi creare o analizzare..."
             className="min-h-[80px] pr-14 py-4 bg-muted/10 border-border/50 focus-visible:ring-primary/20 transition-all resize-none font-body text-sm rounded-xl"
           />
           <div className="absolute right-4 bottom-4">
