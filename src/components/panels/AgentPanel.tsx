@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Send, Bot, User, Sparkles, CheckCircle2, ListTodo } from "lucide-react";
+import { Send, Bot, User, Sparkles, CheckCircle2, ListTodo, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -24,12 +24,12 @@ export function AgentPanel() {
     {
       id: "welcome",
       role: "assistant",
-      content: "Pronto ad aiutarti! Seleziona un progetto e un modello dalla sidebar. Posso analizzare file di migliaia di righe leggendoli a pezzi: chiedimi pure di analizzarne la struttura.",
+      content: "### Benvenuto nel tuo Workspace Agentico\nSegui questi passi per lavorare su un progetto locale:\n\n1. **Indicizza**: Inserisci il path nella sidebar e clicca 'Indicizza Ora'.\n2. **Modello**: Seleziona `qwen2.5-coder` per refactoring complessi.\n3. **Task**: Chiedi di analizzare un file. Se è grande, userò `readFileLines` per leggerlo a pezzi.\n4. **Piano**: Genererò un piano d'azione che potrai confermare passo dopo passo.",
       suggestions: [
-        "Analizza struttura MetricsRestService.java",
-        "Suggerisci un piano di refactoring",
-        "Cerca file duplicati",
-        "Spiega la logica del database"
+        "Analizza MetricsRestService.java",
+        "Proponi refactoring per il layout mobile",
+        "Spiega la logica di SendKmReminder.php",
+        "Cerca file inutilizzati"
       ]
     },
   ]);
