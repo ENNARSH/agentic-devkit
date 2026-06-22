@@ -40,23 +40,17 @@ import { cn } from "@/lib/utils";
 
 // Lista dei modelli disponibili basata sull'output dell'utente
 const AVAILABLE_MODELS = [
-  // Qwen (coding)
+  // Modelli Locali Ollama (Attivi sul tuo PC)
   { id: "qwen2.5-coder:7b", name: "Qwen 2.5 Coder 7B (Consigliato)", type: "code" },
-  { id: "qwen2.5-coder:14b", name: "Qwen 2.5 Coder 14B (Potente)", type: "code" },
+  { id: "qwen3.5:9b", name: "Qwen 3.5 9B (Locale)", type: "code" },
+  { id: "qwen3:8b", name: "Qwen 3 8B (Locale)", type: "code" },
+  { id: "gemma4:e4b", name: "Gemma 4 e4b (Locale)", type: "general" },
 
-  // Gemma (NUOVI)
-  { id: "gemma3:latest", name: "Gemma 3 (Latest)", type: "general" },
-  { id: "gemma3:4b", name: "Gemma 3 4B (Leggero)", type: "general" },
-
-  // Reasoning
-  { id: "deepseek-r1:8b", name: "DeepSeek R1 8B (Ragionamento)", type: "logic" },
-
-  // General
-  { id: "llama3.1:latest", name: "Llama 3.1 8B", type: "general" },
-  { id: "mistral:latest", name: "Mistral 7B", type: "general" },
-
-  // Large
-  { id: "gpt-oss:20b", name: "GPT OSS 20B", type: "large" },
+  // Google Gemini (Cloud)
+  { id: "googleai/gemini-3.5-flash", name: "Gemini 3.5 Flash (Cloud)", type: "code" },
+  { id: "googleai/gemini-2.5-pro", name: "Gemini 2.5 Pro (Cloud)", type: "code" },
+  { id: "googleai/gemini-2.5-flash", name: "Gemini 2.5 Flash (Cloud)", type: "code" },
+  { id: "googleai/gemini-flash-latest", name: "Gemini 1.5 Flash (Classic)", type: "code" },
 ];
 
 export function ProjectSidebar() {
@@ -176,6 +170,47 @@ export function ProjectSidebar() {
     }
   };
 
+  const handleOpenDynamic = async () => {
+    const targetPath = projectPath;
+    if (!targetPath) {
+      toast({ title: "Errore", description: "Inserisci un percorso valido", variant: "destructive" });
+      return;
+    }
+
+    setIsIndexing(true);
+    setProgress(0);
+    setCurrentFile("Scansione file...");
+    
+    try {
+      const fileList = await getFilesToProcess(targetPath);
+      const total = fileList.length;
+      
+      const projectName = targetPath.split(/[/\\]/).pop() || 'project-index';
+      
+      const dynamicResults = fileList.map(filePath => ({
+        filePath,
+        semanticSummary: ""
+      }));
+      
+      await saveProjectIndex(dynamicResults, projectName);
+      
+      localStorage.setItem(`path_${projectName}`, targetPath);
+      localStorage.setItem('activeProjectPath', targetPath);
+      localStorage.setItem('activeProjectName', projectName);
+      localStorage.setItem('activeProjectIndex', projectName);
+
+      setFiles(dynamicResults);
+      toast({ title: "Connesso!", description: `Cartella '${projectName}' aperta dinamicamente (${total} file).` });
+      refreshProjectsList();
+      setActiveProject(projectName);
+    } catch (error) {
+      toast({ variant: "destructive", title: "Errore durante l'apertura dinamica" });
+    } finally {
+      setIsIndexing(false);
+      setCurrentFile("");
+    }
+  };
+
   return (
     <Sidebar collapsible="icon" className="border-r">
       <SidebarHeader className="p-4 border-b">
@@ -223,15 +258,28 @@ export function ProjectSidebar() {
                 placeholder="C:\Percorso\Progetto..."
                 className="h-8 text-[11px] bg-muted/30 border-none focus-visible:ring-1 focus-visible:ring-primary/50"
               />
-              <Button 
-                onClick={() => handleIndex()} 
-                disabled={isIndexing || !projectPath} 
-                size="sm" 
-                className="h-8 font-bold w-full shadow-sm"
-              >
-                {isIndexing ? <RefreshCw className="mr-2 h-3 w-3 animate-spin" /> : <FolderOpen className="mr-2 h-3 w-3" />}
-                {isIndexing ? "Analisi..." : "Indicizza Ora"}
-              </Button>
+              <div className="flex flex-col gap-2">
+                <Button 
+                  onClick={() => handleOpenDynamic()} 
+                  disabled={isIndexing || !projectPath} 
+                  size="sm" 
+                  variant="secondary"
+                  className="h-8 font-bold w-full shadow-sm text-[11px] bg-primary/20 hover:bg-primary/30 text-primary border border-primary/20"
+                >
+                  <FolderOpen className="mr-2 h-3 w-3" />
+                  Apri Dinamicamente
+                </Button>
+                <Button 
+                  onClick={() => handleIndex()} 
+                  disabled={isIndexing || !projectPath} 
+                  size="sm" 
+                  variant="ghost"
+                  className="h-7 font-normal w-full text-[10px] text-muted-foreground hover:text-foreground"
+                >
+                  {isIndexing ? <RefreshCw className="mr-2 h-3 w-3 animate-spin" /> : <Layers className="mr-2 h-3 w-3" />}
+                  {isIndexing ? "Analisi..." : "Indicizza con AI (Lento)"}
+                </Button>
+              </div>
               {isIndexing && (
                 <div className="space-y-2 mt-2 px-1">
                   <Progress value={progress} className="h-1" />

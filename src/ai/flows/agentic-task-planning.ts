@@ -5,14 +5,185 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { loadProjectIndex, listIndexedProjects } from './ai-codebase-indexing';
+import { loadProjectIndex, listIndexedProjects, getFilesToProcess } from './ai-codebase-indexing';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execPromise = promisify(exec);
 
 const MessageSchema = z.object({
   role: z.enum(['user', 'assistant', 'system']),
   content: z.string(),
 });
+
+const listDirectoryTool = ai.defineTool(
+  {
+    name: 'listDirectory',
+    description: 'Elenca il contenuto di una directory del progetto (file e cartelle). Usalo per esplorare la struttura del codice.',
+    inputSchema: z.object({
+      dirPath: z.string().optional().describe('Percorso relativo della directory da elencare (vuoto o "." per la root).'),
+    }),
+    outputSchema: z.object({
+      files: z.array(z.object({
+        name: z.string(),
+        isDir: z.boolean(),
+        size: z.number().optional(),
+      })),
+      error: z.string().optional(),
+    }),
+  },
+  async (input, { context }) => {
+    const projectPath = (context as any)?.projectPath;
+    if (!projectPath) return { files: [], error: "Errore: Percorso progetto non configurato." };
+    try {
+      const targetPath = path.join(projectPath, input.dirPath || '.');
+      const entries = await fs.readdir(targetPath, { withFileTypes: true });
+      const files = await Promise.all(entries.map(async (entry) => {
+        const entryPath = path.join(targetPath, entry.name);
+        let size: number | undefined;
+        if (entry.isFile()) {
+          try {
+            const stats = await fs.stat(entryPath);
+            size = stats.size;
+          } catch {}
+        }
+        return {
+          name: entry.name,
+          isDir: entry.isDirectory(),
+          size,
+        };
+      }));
+      return { files };
+    } catch (e: any) {
+      return { files: [], error: e.message };
+    }
+  }
+);
+
+const searchCodeTool = ai.defineTool(
+  {
+    name: 'searchCode',
+    description: 'Cerca una stringa o una query testuale all\'interno dei file di codice del progetto (ricerca stile grep).',
+    inputSchema: z.object({
+      query: z.string().describe('La stringa o termine di ricerca.'),
+      extension: z.string().optional().describe('Estensione opzionale dei file in cui cercare (es. ".ts", ".js", ".php").'),
+    }),
+    outputSchema: z.object({
+      results: z.array(z.object({
+        filePath: z.string(),
+        line: z.number(),
+        content: z.string(),
+      })),
+      error: z.string().optional(),
+    }),
+  },
+  async (input, { context }) => {
+    const projectPath = (context as any)?.projectPath;
+    if (!projectPath) return { results: [], error: "Errore: Percorso progetto non configurato." };
+    
+    const results: { filePath: string; line: number; content: string }[] = [];
+    const ignoreFolders = ['node_modules', '.git', '.next', 'dist', 'build', '.firebase', 'out'];
+    
+    async function searchDir(currentDir: string) {
+      let entries;
+      try {
+        entries = await fs.readdir(currentDir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      
+      for (const entry of entries) {
+        const fullPath = path.join(currentDir, entry.name);
+        const relPath = path.relative(projectPath, fullPath);
+        
+        if (entry.isDirectory()) {
+          if (!entry.name.startsWith('.') && !ignoreFolders.includes(entry.name)) {
+            await searchDir(fullPath);
+          }
+        } else if (entry.isFile()) {
+          if (input.extension && !entry.name.endsWith(input.extension)) {
+            continue;
+          }
+          if (entry.name === 'package-lock.json' || entry.name === 'yarn.lock' || entry.name === 'pnpm-lock.yaml') {
+            continue;
+          }
+          
+          try {
+            const stats = await fs.stat(fullPath);
+            if (stats.size > 500 * 1024) continue;
+            
+            const content = await fs.readFile(fullPath, 'utf-8');
+            if (content.includes(input.query)) {
+              const lines = content.split('\n');
+              lines.forEach((lineText, index) => {
+                if (lineText.includes(input.query)) {
+                  results.push({
+                    filePath: relPath,
+                    line: index + 1,
+                    content: lineText.trim().substring(0, 150),
+                  });
+                }
+              });
+            }
+          } catch {}
+          
+          if (results.length >= 50) return;
+        }
+      }
+    }
+    
+    try {
+      await searchDir(projectPath);
+      return { results: results.slice(0, 50) };
+    } catch (e: any) {
+      return { results: [], error: e.message };
+    }
+  }
+);
+
+const runCommandTool = ai.defineTool(
+  {
+    name: 'runCommand',
+    description: 'Esegue un comando shell all\'interno del percorso del progetto. Usalo per lanciare test, compilare o verificare errori.',
+    inputSchema: z.object({
+      command: z.string().describe('Il comando completo da eseguire.'),
+    }),
+    outputSchema: z.object({
+      stdout: z.string(),
+      stderr: z.string(),
+      exitCode: z.number().optional(),
+      error: z.string().optional(),
+    }),
+  },
+  async (input, { context }) => {
+    const projectPath = (context as any)?.projectPath;
+    if (!projectPath) return { stdout: "", stderr: "", error: "Errore: Percorso progetto non configurato." };
+    
+    console.log(`[TOOL-USE] Esecuzione comando nel terminale: "${input.command}" in ${projectPath}`);
+    
+    try {
+      const { stdout, stderr } = await execPromise(input.command, {
+        cwd: projectPath,
+        timeout: 30000,
+        maxBuffer: 1024 * 1024 * 5,
+      });
+      return {
+        stdout: stdout.toString(),
+        stderr: stderr.toString(),
+        exitCode: 0
+      };
+    } catch (e: any) {
+      return {
+        stdout: e.stdout ? e.stdout.toString() : "",
+        stderr: e.stderr ? e.stderr.toString() : e.message,
+        exitCode: e.code,
+        error: e.message
+      };
+    }
+  }
+);
 
 const getFileInfoTool = ai.defineTool(
   {
@@ -143,7 +314,9 @@ const AgenticTaskPlanningInputSchema = z.object({
 export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlanningInputSchema>) {
   const startTime = Date.now();
   const rawModelName = input.model || 'qwen2.5-coder:7b';
-  const selectedModel = `ollama/${rawModelName}`;
+  const selectedModel = rawModelName.startsWith('googleai/') 
+    ? rawModelName 
+    : `ollama/${rawModelName}`;
   
   console.log(`\n[AGENT-START] ---------------------------------------------------`);
   console.log(`[AGENT-START] Modello: ${selectedModel}`);
@@ -156,9 +329,23 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
   }
   
   const projectIndex = await loadProjectIndex(projectName);
-  const projectSummary = projectIndex.length > 0 
-    ? projectIndex.map(f => `- ${f.filePath}: ${f.semanticSummary}`).join('\n')
-    : "Il progetto è vuoto o nuovo. Sei libero di creare la struttura iniziale.";
+  let projectSummary = "";
+  if (projectIndex.length > 0) {
+    projectSummary = projectIndex.map(f => `- ${f.filePath}: ${f.semanticSummary}`).join('\n');
+  } else if (input.projectPath) {
+    try {
+      const files = await getFilesToProcess(input.projectPath);
+      projectSummary = "File presenti nel progetto (rilevati dinamicamente):\n" + 
+        files.slice(0, 100).map(f => `- ${f}`).join('\n');
+      if (files.length > 100) {
+        projectSummary += `\n...e altri ${files.length - 100} file. Usa 'searchCode' o 'listDirectory' per esplorare.`;
+      }
+    } catch (e: any) {
+      projectSummary = "Il progetto è vuoto o nuovo. Sei libero di creare la struttura iniziale.";
+    }
+  } else {
+    projectSummary = "Il progetto è vuoto o nuovo. Sei libero di creare la struttura iniziale.";
+  }
 
   try {
     const systemInstruction = `Sei un Ingegnere del Software Senior esperto in refactoring e architettura software.
@@ -168,12 +355,14 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
       ${projectSummary}
       
       PROTOCOLLO AGENTICO (OBBLIGATORIO):
-      1. Se devi analizzare o modificare file, USA SEMPRE i tools. Non fare supposizioni.
-      2. FILE GRANDI (> 500 righe): Usa sempre 'getFileInfo' prima di leggere, poi 'readFileLines' per piccoli blocchi.
-      3. PIANO D'AZIONE: Prima di scrivere codice, genera sempre un piano strutturato usando il formato <PLAN>[{"step": "descrizione"}]</PLAN>.
-      4. CREAZIONE: Se l'utente vuole iniziare un nuovo progetto, crea prima un piano per i file fondamentali (config, package.json, src/index, ecc.).
-      5. SCRITTURA: Usa 'writeFile' per creare o aggiornare file. Fornisci sempre il contenuto integrale.
-
+      1. Se devi analizzare, esplorare o modificare file, USA SEMPRE i tools. Non fare supposizioni.
+      2. Per esplorare la struttura delle cartelle o trovare file, usa 'listDirectory'.
+      3. Per cercare definizioni, variabili, classi o testi nel codice, usa 'searchCode'.
+      4. FILE GRANDI (> 500 righe): Usa sempre 'getFileInfo' prima di leggerli, poi 'readFileLines' per piccoli blocchi.
+      5. PIANO D'AZIONE: Prima di scrivere codice, genera sempre un piano strutturato usando il formato <PLAN>[{"step": "descrizione"}]</PLAN>.
+      6. SCRITTURA: Usa 'writeFile' per creare o aggiornare file. Fornisci sempre il contenuto integrale.
+      7. VERIFICA: Puoi lanciare comandi shell (es. test, compilazioni, git diff) usando 'runCommand' per assicurarti che il tuo lavoro sia privo di bug.
+ 
       FORMATO RISPOSTA:
       - Rispondi in Italiano.
       - Sii estremamente tecnico e conciso.
@@ -186,8 +375,16 @@ export async function agenticTaskPlanning(input: z.infer<typeof AgenticTaskPlann
       history: input.history as any,
       system: systemInstruction,
       prompt: input.developmentTask,
-      tools: [readFileTool, readFileLinesTool, getFileInfoTool, writeFileTool],
-      config: { context: { projectPath: input.projectPath } }
+      tools: [
+        readFileTool, 
+        readFileLinesTool, 
+        getFileInfoTool, 
+        writeFileTool, 
+        listDirectoryTool, 
+        searchCodeTool, 
+        runCommandTool
+      ],
+      context: { projectPath: input.projectPath }
     });
 
     let text = response.text || "";
